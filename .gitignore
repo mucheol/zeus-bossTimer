@@ -1,0 +1,8 @@
+*.keystore
+*.jks
+*.apk
+*.idsig
+*password*
+dist/
+build/
+latest.json
