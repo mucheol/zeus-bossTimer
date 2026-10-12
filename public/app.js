@@ -79,7 +79,7 @@ function renderBosses() {
     return `<article class="boss-card" data-boss="${escape(boss.id)}" data-alert-enabled="${enabled}" ${administrator ? `tabindex="0" aria-label="${escape(boss.name)} 공통 시간 수정"` : ''}>
       <div class="boss-top"><div class="boss-identity"><h3>${escape(boss.name)}</h3><span class="boss-meta">Lv.${boss.level} · ${escape(boss.region)}</span></div><button class="boss-alert" data-alert="${escape(boss.id)}" aria-label="${escape(boss.name)} 알림" aria-pressed="${enabled}">${bell}<span>${enabled ? preferences.enabled ? '켜짐' : '일시중지' : '알림'}</span></button></div>
       <div class="boss-time"><div class="portrait" role="img" aria-label="${escape(boss.name)} 초상화" style="background-position:${x}% ${y}%"></div><div class="countdown" role="timer" title="남은 시간 · 분 단위"></div></div>
-      <div class="card-bottom"><span class="kind"></span><span class="spawn-time"></span></div>
+      <div class="card-bottom"><span class="spawn-time"></span></div>
       ${editing ? `<div class="move-buttons"><button data-move="${escape(boss.id)}" data-direction="-1" aria-label="${escape(boss.name)} 앞으로" ${index === 0 ? 'disabled' : ''}>←</button><button class="drag-handle" data-drag="${escape(boss.id)}" aria-label="${escape(boss.name)} 순서 이동" title="끌어서 이동 · 방향키로 한 칸 이동">⠿</button><button data-move="${escape(boss.id)}" data-direction="1" aria-label="${escape(boss.name)} 뒤로" ${index === bosses.length - 1 ? 'disabled' : ''}>→</button></div>` : ''}
     </article>`;
   }).join('');
@@ -101,17 +101,12 @@ function tick() {
   for (const boss of catalog.bosses) {
     const card = document.querySelector(`[data-boss="${boss.id}"]`);
     const timing = bossTiming(boss, now);
-    for (const kind of ['observed', 'predicted']) card.classList.toggle(kind, timing.kind === kind);
     card.classList.toggle('soon', timing.at !== null && timing.at - now < 600000);
     const countdown = card.querySelector('.countdown');
     const text = remaining(timing.at, now);
     countdown.innerHTML = escape(text).replace(/(시간|분)/g, '<span class="time-unit">$1</span>');
     countdown.setAttribute('aria-label', timing.at === null ? text : `${text} 남음`);
     card.querySelector('.spawn-time').textContent = timing.at ? `${koreanTime(timing.at)} 예정` : `관측 ${koreanTime(Date.parse(timing.latest.capturedAt))}`;
-    const kind = card.querySelector('.kind');
-    const manual = timing.latest.source?.startsWith('admin-');
-    kind.textContent = timing.kind === 'observed' ? (manual ? '관리자 수정' : '관측 기준') : timing.sampleCount < 2 ? '추정 · 자료 부족' : timing.index > 1 ? '반복 추정' : '다음 회차 추정';
-    kind.title = timing.kind === 'predicted' ? `처치시간 약 ${Math.round(timing.killSeconds)}초 · 기본 ${timing.defaultKillSeconds}초 · 보정 ${timing.sampleCount}개(관리자 포함 ${timing.manualSampleCount}개) · 기준 이후 ${timing.index}회차 추정` : manual ? '저장 시점부터 입력한 시간·분 적용' : '촬영 초 미상 · 시각 오차 있음';
   }
   for (const button of document.querySelectorAll('[data-hour]')) {
     const hour = Number(button.dataset.hour);
