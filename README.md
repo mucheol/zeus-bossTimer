@@ -47,6 +47,7 @@ npm run check
 
 ## 공통 시간 수정
 
+- 새 세션·다른 PC에서도 이미지 업로드 후 기록부터 배포까지 [이미지 기록·적용 절차](docs/OBSERVATION-WORKFLOW.md)를 따릅니다. AGENTS.md에서 이 절차를 우선 읽도록 연결했습니다. 다른 PC는 작업 전에 원격 최신 커밋을 받고 현재 배포 자료와 대조합니다.
 - 원본 기록: [BOSS-OBSERVATIONS.md](BOSS-OBSERVATIONS.md), `docs/observations/`의 원본 이미지.
 - 실제 앱 데이터: `public/data/catalog.json`.
 - 촬영 시각은 한국시간으로 기록합니다. 촬영 초를 모르면 `:00`은 계산용 대표값이며 정확한 초로 간주하지 않습니다.
