@@ -3,14 +3,42 @@ import assert from 'node:assert/strict';
 import catalog from '../public/data/catalog.json' with { type: 'json' };
 import { estimate, bossTiming, invasionTimes, plannedEvents, orderedBosses, defaultPreferences } from '../public/lib/engine.js';
 
+const previousCatalog = structuredClone(catalog);
+for (const boss of previousCatalog.bosses) {
+  boss.observations = boss.observations.filter(observation => Date.parse(observation.capturedAt) <= Date.parse('2026-10-12T12:01:00+09:00'));
+}
+
 // 최신 표와 같은 회차 보정이 원본 시간 그대로 계산되는지 확인합니다.
 test('12:01 관측 9마리와 동일 회차 보정은 새 학습 표본이 아니다', () => {
-  assert.equal(catalog.bosses.length, 9);
-  assert.equal(estimate(catalog.bosses.find(boss => boss.id === 'chrysophagos')).latest.spawnAt, '2026-10-12T12:20:17+09:00');
-  for (const boss of catalog.bosses) assert.equal(estimate(boss).sampleCount, 0);
-  const timing = bossTiming(catalog.bosses[0], Date.parse('2026-10-12T12:01:00+09:00'));
+  assert.equal(previousCatalog.bosses.length, 9);
+  assert.equal(estimate(previousCatalog.bosses.find(boss => boss.id === 'chrysophagos')).latest.spawnAt, '2026-10-12T12:20:17+09:00');
+  for (const boss of previousCatalog.bosses) assert.equal(estimate(boss).sampleCount, 0);
+  const timing = bossTiming(previousCatalog.bosses[0], Date.parse('2026-10-12T12:01:00+09:00'));
   assert.equal(timing.kind, 'observed');
   assert.equal(timing.at, Date.parse('2026-10-12T13:57:00+09:00'));
+});
+
+// 새 캡처의 예정값과 두 보스의 연속 회차 전환을 확인합니다.
+test('12:25 관측 갱신, 두 보스만 새 연속 회차 표본 추가', () => {
+  assert.equal(catalog.source, 'screenshot-005');
+  assert.equal(catalog.capturedAt, '2026-10-12T12:25:00+09:00');
+  assert.equal(catalog.capturedSecondsKnown, false);
+  const expected = { tripork: '13:57:00', bedix: '13:54:00', gotsis: '19:16:00', alastor: '12:58:39', iokantos: '16:41:00', kini: '16:44:00', thrason: '16:57:00', chrysophagos: '20:21:00', amorphos: '20:23:00' };
+  for (const boss of catalog.bosses) {
+    const learned = estimate(boss);
+    const previous = estimate(previousCatalog.bosses.find(item => item.id === boss.id)).latest;
+    assert.equal(learned.latest.spawnAt, `2026-10-12T${expected[boss.id]}+09:00`);
+    assert.equal(learned.latest.source, 'screenshot-005');
+    assert.deepEqual(boss.observations.slice(0, -1), previousCatalog.bosses.find(item => item.id === boss.id).observations);
+    if (['chrysophagos', 'amorphos'].includes(boss.id)) {
+      assert.equal(learned.latest.consecutiveFrom, previous.cycleId);
+      assert.equal(learned.sampleCount, 1);
+      assert.equal(learned.interval, 8 * 3600000 + (boss.id === 'chrysophagos' ? 43000 : 14000));
+    } else {
+      assert.equal(learned.latest.cycleId, previous.cycleId);
+      assert.equal(learned.sampleCount, 0);
+    }
+  }
 });
 
 // 다음 한 회차까지만 추정하며 지난 추정을 다시 학습하지 않습니다.
@@ -55,9 +83,9 @@ test('KST 자정·12시·18시 침공, 정각만 예약하고 지난 알림 없�
 test('같은 회차 보정은 같은 알림 키, 지난 시점 제외', () => {
   const now = Date.parse('2026-10-12T12:18:00+09:00');
   const prefs = { bosses: ['chrysophagos'], offsets: [600, 300, 60, 0], invasion: [] };
-  const before = plannedEvents(catalog, prefs, now);
+  const before = plannedEvents(previousCatalog, prefs, now);
   assert.equal(before.filter(event => event.key.includes(':0:')).length, 2);
-  const copy = structuredClone(catalog);
+  const copy = structuredClone(previousCatalog);
   copy.bosses.find(boss => boss.id === 'chrysophagos').observations.at(-1).spawnAt = '2026-10-12T12:20:40+09:00';
   const after = plannedEvents(copy, prefs, now);
   assert.deepEqual(before.map(event => event.key), after.map(event => event.key));
