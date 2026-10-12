@@ -67,11 +67,10 @@ function renderBosses() {
     const x = (boss.portrait[0] - 110) / (2520 - 220) * 100;
     const y = (boss.portrait[1] - 110) / (1080 - 220) * 100;
     const enabled = preferences.bosses.includes(boss.id);
-    return `<article class="boss-card" data-boss="${escape(boss.id)}">
-      <div class="boss-top"><div class="portrait" role="img" aria-label="${escape(boss.name)} 초상화" style="background-position:${x}% ${y}%"></div><div class="boss-identity"><h3>${escape(boss.name)}</h3><span class="boss-meta">Lv.${boss.level} · ${escape(boss.region)}</span><span class="boss-area" title="${escape(boss.area)}">${escape(boss.area)}</span></div></div>
-      <div class="countdown"></div><div class="spawn-time"></div>
-      <div class="card-bottom"><span class="kind"></span><button class="boss-alert" data-alert="${escape(boss.id)}" aria-label="${escape(boss.name)} 알림" aria-pressed="${enabled}">${bell}<span>${enabled ? '켜짐' : '알림'}</span></button></div>
-      <p class="precision"></p>
+    return `<article class="boss-card" data-boss="${escape(boss.id)}" data-alert-enabled="${enabled}">
+      <div class="boss-top"><div class="boss-identity"><h3>${escape(boss.name)}</h3><span class="boss-meta">Lv.${boss.level} · ${escape(boss.region)}</span></div><button class="boss-alert" data-alert="${escape(boss.id)}" aria-label="${escape(boss.name)} 알림" aria-pressed="${enabled}">${bell}<span>${enabled ? '켜짐' : '알림'}</span></button></div>
+      <div class="boss-time"><div class="portrait" role="img" aria-label="${escape(boss.name)} 초상화" style="background-position:${x}% ${y}%"></div><div class="countdown"></div></div>
+      <div class="card-bottom"><span class="kind"></span><span class="spawn-time"></span></div>
       ${editing ? `<div class="move-buttons"><button data-move="${index}" data-direction="-1" aria-label="${escape(boss.name)} 앞으로" ${index === 0 ? 'disabled' : ''}>←</button><button data-move="${index}" data-direction="1" aria-label="${escape(boss.name)} 뒤로" ${index === bosses.length - 1 ? 'disabled' : ''}>→</button></div>` : ''}
     </article>`;
   }).join('');
@@ -86,10 +85,11 @@ function tick() {
     const card = document.querySelector(`[data-boss="${boss.id}"]`);
     const timing = bossTiming(boss, now);
     card.className = `boss-card ${timing.kind} ${timing.at && timing.at - now < 600000 ? 'soon' : ''}`;
-    card.querySelector('.countdown').textContent = remaining(timing.at, now);
-    card.querySelector('.spawn-time').textContent = timing.at ? `${koreanTime(timing.at, true)} 예정` : `최근 관측 ${koreanTime(Date.parse(timing.latest.capturedAt), true)}`;
-    card.querySelector('.kind').textContent = ({ observed: '관측 기준', predicted: '다음 회차 추정', stale: '자료 갱신 필요' })[timing.kind];
-    card.querySelector('.precision').textContent = timing.kind === 'predicted' ? (timing.sampleCount < 2 ? '기본 주기 · 보정자료 부족' : `연속 회차 ${timing.sampleCount}개 기준`) : '촬영 초 미상 · 시각 오차 있음';
+    card.querySelector('.countdown').innerHTML = escape(remaining(timing.at, now)).replace(/(시간|분|초)/g, '<span class="time-unit">$1</span>');
+    card.querySelector('.spawn-time').textContent = timing.at ? `${koreanTime(timing.at)} 예정` : `관측 ${koreanTime(Date.parse(timing.latest.capturedAt))}`;
+    const kind = card.querySelector('.kind');
+    kind.textContent = ({ observed: '관측 기준', predicted: timing.sampleCount < 2 ? '추정 · 자료 부족' : '다음 회차 추정', stale: '갱신 필요' })[timing.kind];
+    kind.title = timing.kind === 'predicted' ? (timing.sampleCount < 2 ? '기본 주기 · 보정자료 부족' : `연속 회차 ${timing.sampleCount}개 기준`) : '촬영 초 미상 · 시각 오차 있음';
   }
   for (const button of document.querySelectorAll('[data-hour]')) {
     const hour = Number(button.dataset.hour);

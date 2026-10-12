@@ -30,23 +30,24 @@ h2{font-size:14px;margin:0;font-weight:650;letter-spacing:-.3px}.section-icon{co
 .invasion-buttons button[aria-pressed=true] span{color:#e2cf9e}
 .invasion-note{font-size:10px;color:var(--muted);margin:6px 0 0;text-align:center}
 .boss-heading{margin:15px 0 5px}.boss-heading h2 span{color:var(--muted);margin-left:6px;font-size:11px;font-weight:400}
-.boss-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-.boss-card{position:relative;border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:10px;min-width:0;overflow:hidden}
-.boss-top{display:flex;align-items:center;gap:8px;min-width:0}
-.portrait{flex-shrink:0;width:36px;height:40px;border-radius:7px;background-image:url('/images/bosses.png');background-size:1145.455% 490.909%;background-repeat:no-repeat;border:1px solid #4b5040}
-.boss-identity{min-width:0}.boss-identity h3{margin:0;font-size:12px;font-weight:650;letter-spacing:-.6px;overflow-wrap:anywhere}
-.boss-meta{color:var(--muted);font-size:9px;white-space:nowrap;letter-spacing:-.3px}
-.boss-area{display:block;color:var(--muted);font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.4px}
-.countdown{margin:8px 0 2px;color:var(--text);font-size:23px;font-weight:650;letter-spacing:-1px;line-height:1.3;font-variant-numeric:tabular-nums;white-space:nowrap}
+.boss-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.boss-card{position:relative;border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:9px;min-width:0;overflow:hidden}
+.boss-card[data-alert-enabled=true]{border-color:#94d5b2;background:#203329;box-shadow:inset 0 0 0 1px #94d5b240}
+.boss-top{min-height:36px;padding-right:42px;min-width:0}
+.boss-identity{min-width:0}.boss-identity h3{margin:0;font-size:13px;font-weight:700;letter-spacing:-.6px;white-space:nowrap}
+.boss-meta{color:#afbbb1;font-size:10px;white-space:nowrap;letter-spacing:-.3px}
+.boss-time{display:flex;align-items:center;gap:7px;margin-top:5px;min-width:0}
+.portrait{flex-shrink:0;width:27px;height:31px;border-radius:6px;background-image:url('/images/bosses.png');background-size:1145.455% 490.909%;background-repeat:no-repeat;border:1px solid #4b5040}
+.countdown{margin:0;color:var(--text);font-size:clamp(19px,5.8vw,25px);font-weight:750;letter-spacing:-1px;line-height:1.3;font-variant-numeric:tabular-nums;white-space:nowrap}
+.time-unit{font-size:.58em;font-weight:550;letter-spacing:0}
 .boss-card.soon .countdown{color:var(--gold)}
-.boss-card.stale .countdown{font-size:20px;color:var(--muted)}
-.spawn-time{color:var(--muted);font-size:10px;min-height:15px}
-.card-bottom{display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding-top:3px;border-top:1px solid var(--line);gap:3px}
-.kind{font-size:9px;color:var(--mint)}.predicted .kind{color:var(--gold)}.stale .kind{color:var(--muted)}
-.boss-alert{min-width:44px;min-height:32px;font-size:10px;color:var(--muted);display:flex;gap:4px;align-items:center;justify-content:center;border-radius:8px;padding:5px 7px}
-.boss-alert svg{height:14px;width:14px;stroke:currentColor;stroke-width:1.5;fill:none;stroke-linecap:round;stroke-linejoin:round}
-.boss-alert[aria-pressed=true]{background:#2a3c31;color:var(--mint)}
-.precision{font-size:9px;color:var(--muted);margin:2px 0 0;letter-spacing:-.2px}.observed .precision{display:none}
+.boss-card.stale .countdown{font-size:18px;color:var(--muted)}
+.spawn-time{color:#afbbb1;font-size:9px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.card-bottom{display:flex;justify-content:space-between;align-items:center;margin-top:6px;gap:4px}
+.kind{font-size:9px;color:var(--mint);white-space:nowrap;letter-spacing:-.3px}.predicted .kind{color:var(--gold)}.stale .kind{color:var(--muted)}
+.boss-alert{position:absolute;top:4px;right:4px;width:44px;height:44px;font-size:9px;color:var(--muted);display:flex;flex-direction:column;gap:1px;align-items:center;justify-content:center;border:1px solid transparent;border-radius:8px;padding:3px}
+.boss-alert svg{height:16px;width:16px;stroke:currentColor;stroke-width:1.7;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.boss-alert[aria-pressed=true]{background:var(--mint);color:#14261c;border-color:#c6f1d9;font-weight:750}
 .move-buttons{display:flex;gap:8px;margin-top:8px}.move-buttons button{border:1px solid var(--line);border-radius:6px;flex:1;min-height:38px}
 .order-actions{font-size:10px;color:var(--muted);margin-bottom:10px;align-items:center;justify-content:space-between}.order-actions:not([hidden]){display:flex}
 .notice{display:flex;align-items:flex-start;gap:9px;color:var(--muted);margin:19px 0;font-size:10px;line-height:1.75}.notice p{margin:0}.notice>span{color:var(--gold);font-size:14px}.notice strong{font-weight:500;color:#c0c8bc}
@@ -65,6 +66,6 @@ dialog::backdrop{background:#060a08b8;backdrop-filter:blur(4px)}
 .update-banner{position:fixed;bottom:0;left:0;right:0;background:var(--gold);color:#20251e;padding:15px;text-align:center;z-index:11;font-size:12px}.update-banner button{margin-left:15px;text-decoration:underline;font-weight:700}
 .loading{color:var(--muted);grid-column:1/-1;padding:20px 0}
 [hidden]{display:none!important}
-@media(min-width:600px){.app{padding-top:30px}.intro{padding-top:36px}h1{font-size:42px}.boss-grid{gap:14px}.boss-card{padding:18px}.portrait{width:60px;height:65px}.boss-identity h3{font-size:16px}.boss-meta{font-size:11px}.countdown{font-size:32px}.boss-card.stale .countdown{font-size:28px}.spawn-time,.kind,.precision{font-size:11px}.boss-alert{font-size:12px}.invasion{padding:20px}.invasion-buttons button{min-height:72px}.observation-line{font-size:12px}.notice{font-size:12px}}
-@media(max-width:360px){.app{padding-left:14px;padding-right:14px}.boss-card{padding:10px}.portrait{width:34px;height:42px}.boss-top{gap:6px}.boss-identity h3{font-size:11px}.countdown{font-size:21px}.tiny-label{font-size:9px}}
+@media(min-width:600px){.app{padding-top:30px}.intro{padding-top:36px}h1{font-size:42px}.boss-grid{gap:10px}.boss-card{padding:12px}.boss-top{min-height:39px}.portrait{width:34px;height:38px}.boss-identity h3{font-size:16px}.boss-meta{font-size:11px}.countdown{font-size:32px}.boss-card.stale .countdown{font-size:25px}.spawn-time,.kind{font-size:11px}.boss-alert{top:7px;right:7px}.invasion{padding:20px}.invasion-buttons button{min-height:72px}.observation-line{font-size:12px}.notice{font-size:12px}}
+@media(max-width:360px){.app{padding-left:14px;padding-right:14px}.boss-identity h3{font-size:12px}.portrait{width:24px;height:29px}.boss-time{gap:6px}.kind{font-size:8px}.boss-card.stale .countdown{font-size:16px}.tiny-label{font-size:9px}}
 @media(prefers-reduced-motion:no-preference){button{transition:background .15s,border-color .15s}}
