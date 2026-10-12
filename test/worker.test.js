@@ -169,7 +169,7 @@ test('자료 보정 후 예약 갱신과 발송 이력 보존', async context =>
   await worker.fetch(request('/api/subscription', 'PUT', { subscription: env.subscription, preferences: { bosses: ['tripork'], offsets: [300, 0], invasion: [] } }), env);
   const { results: jobs } = await env.DB.prepare('SELECT * FROM jobs ORDER BY due_at').all();
   const sent = jobs.at(-1);
-  const pending = jobs.at(-2);
+  const pending = jobs[0];
   await env.DB.prepare("UPDATE jobs SET state='sent' WHERE id=?").bind(sent.id).run();
   const observation = catalog.bosses[0].observations.at(-1);
   const originalTime = observation.spawnAt;
@@ -209,7 +209,7 @@ test('과거 관리자 이력 전체 보존·조회와 이미지 이후 보정 �
 // 인증·공통 저장·다른 기기 조회와 수정 후 예약 교체를 실제 D1에서 검사합니다.
 test('관리자 인증 후 공통 시간 저장, 전체 기기 공유, 초 제거와 예약 교체', async context => {
   const env = await environment(context);
-  const now = Date.parse('2026-10-12T14:10:37.500+09:00');
+  const now = Date.parse('2026-10-12T16:10:37.500+09:00');
   context.mock.method(Date, 'now', () => now);
   const preferences = { bosses: ['bedix'], offsets: [60], invasion: [] };
   await worker.fetch(request('/api/subscription', 'PUT', { subscription: env.subscription, preferences }), env);
@@ -229,7 +229,7 @@ test('관리자 인증 후 공통 시간 저장, 전체 기기 공유, 초 제�
   const update = await env.DB.prepare('SELECT * FROM boss_updates').first();
   assert.equal(update.spawn_at - update.recorded_at, 72 * 60000);
   assert.deepEqual(await (await worker.fetch(request('/data/catalog.json', 'GET'), env)).json(), shared);
-  assert.equal(catalog.bosses.find(boss => boss.id === 'bedix').observations.at(-1).source, 'screenshot-006');
+  assert.equal(catalog.bosses.find(boss => boss.id === 'bedix').observations.at(-1).source, 'screenshot-007');
   await env.DB.prepare("UPDATE jobs SET state='queued' WHERE id=?").bind(oldJob.id).run();
   await deliver(env, oldJob.id, now, async () => assert.fail('관리자 수정 전 예약 발송'));
   assert.equal((await env.DB.prepare('SELECT state FROM jobs WHERE id=?').bind(oldJob.id).first()).state, 'cancelled');
@@ -270,5 +270,5 @@ test('관리자 권한과 입력 경계, 인증 제한·세션 만료·최신 �
   assert.equal((await worker.fetch(request('/api/admin/login', 'POST', { password: env.ADMIN_PASSWORD }), env)).status, 429);
   await env.DB.prepare('INSERT INTO boss_updates(boss_id,recorded_at,spawn_at) VALUES (?,?,?)').bind('bedix', Date.parse('2026-10-12T12:00:00+09:00'), now).run();
   const shared = await (await worker.fetch(request('/data/catalog.json', 'GET'), env)).json();
-  assert.equal(shared.bosses.find(boss => boss.id === 'bedix').observations.at(-1).source, 'screenshot-006');
+  assert.equal(shared.bosses.find(boss => boss.id === 'bedix').observations.at(-1).source, 'screenshot-007');
 });

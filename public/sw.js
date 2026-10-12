@@ -1,4 +1,4 @@
-const VERSION = 'zeus-40d3f1d7cd487827';
+const VERSION = 'zeus-38a383a3a922c280';
 const SHELL = ['/', '/app.css', '/app.js', '/lib/engine.js', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png', '/images/bosses.png', '/data/catalog.json'];
 
 // 첫 설치에 오프라인 화면을 준비합니다.

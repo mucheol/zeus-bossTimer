@@ -189,7 +189,7 @@ function applyCatalog(next, offline = false) {
   preferences = restorePreferences(!restored ? saved.preferences : preferences);
   restored = true;
   $('#network').textContent = offline ? '오프라인 자료' : '연결됨';
-  $('#source-time').textContent = `${koreanTime(Date.parse(catalog.capturedAt), true)} ${catalog.source === 'admin' ? '관리자 수정' : '관측 · 초 미상'}`;
+  $('#source-time').textContent = `${koreanTime(Date.parse(catalog.capturedAt), true, catalog.capturedSecondsKnown)} ${catalog.source === 'admin' ? '관리자 수정' : catalog.capturedSecondsKnown ? '관측' : '관측 · 초 미상'}`;
   if (changed) renderBosses();
   else tick();
   renderSettings();

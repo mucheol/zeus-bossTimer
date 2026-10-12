@@ -87,10 +87,11 @@ export function bossTiming(boss, now = Date.now()) {
 }
 
 // 기기 시간대와 무관하게 한국시간 날짜와 시각을 표시합니다.
-export function koreanTime(time, withDate = false) {
+export function koreanTime(time, withDate = false, withSeconds = false) {
   return new Intl.DateTimeFormat('ko-KR', {
     timeZone: 'Asia/Seoul', hourCycle: 'h23', hour: '2-digit', minute: '2-digit',
-    ...(withDate ? { month: '2-digit', day: '2-digit' } : {})
+    ...(withDate ? { month: '2-digit', day: '2-digit' } : {}),
+    ...(withSeconds ? { second: '2-digit' } : {})
   }).format(time);
 }
 
