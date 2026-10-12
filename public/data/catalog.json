@@ -1,0 +1,316 @@
+{
+  "revision": "2026-10-12-screenshot-004-v1",
+  "capturedAt": "2026-10-12T12:01:00+09:00",
+  "capturedSecondsKnown": false,
+  "source": "screenshot-004",
+  "bosses": [
+    {
+      "id": "tripork",
+      "name": "트리포크",
+      "level": 65,
+      "region": "자하브",
+      "area": "가시 덤불 지대",
+      "respawnHours": 12,
+      "portrait": [
+        2000,
+        850
+      ],
+      "observations": [
+        {
+          "source": "readme-001",
+          "cycleId": "tripork-initial",
+          "capturedAt": "2026-10-11T16:37:00+09:00",
+          "spawnAt": "2026-10-12T01:57:00+09:00",
+          "precisionSeconds": 120
+        },
+        {
+          "source": "screenshot-004",
+          "cycleId": "tripork-20261012",
+          "capturedAt": "2026-10-12T12:01:00+09:00",
+          "spawnAt": "2026-10-12T13:57:00+09:00",
+          "precisionSeconds": 120
+        }
+      ]
+    },
+    {
+      "id": "bedix",
+      "name": "베딕스",
+      "level": 60,
+      "region": "자하브",
+      "area": "공헌의 제단",
+      "respawnHours": 8,
+      "portrait": [
+        1050,
+        850
+      ],
+      "observations": [
+        {
+          "source": "readme-001",
+          "cycleId": "bedix-initial",
+          "capturedAt": "2026-10-11T16:37:00+09:00",
+          "spawnAt": "2026-10-11T21:53:00+09:00",
+          "precisionSeconds": 120
+        },
+        {
+          "source": "screenshot-003",
+          "cycleId": "bedix-20261012",
+          "capturedAt": "2026-10-12T11:49:00+09:00",
+          "spawnAt": "2026-10-12T13:54:00+09:00",
+          "precisionSeconds": 120
+        },
+        {
+          "source": "screenshot-004",
+          "cycleId": "bedix-20261012",
+          "capturedAt": "2026-10-12T12:01:00+09:00",
+          "spawnAt": "2026-10-12T13:54:00+09:00",
+          "precisionSeconds": 120
+        }
+      ]
+    },
+    {
+      "id": "gotsis",
+      "name": "고트시스",
+      "level": 60,
+      "region": "자하브",
+      "area": "황금 리라 부락",
+      "respawnHours": 8,
+      "portrait": [
+        1500,
+        850
+      ],
+      "observations": [
+        {
+          "source": "readme-001",
+          "cycleId": "gotsis-initial",
+          "capturedAt": "2026-10-11T16:37:00+09:00",
+          "spawnAt": "2026-10-11T19:14:00+09:00",
+          "precisionSeconds": 120
+        },
+        {
+          "source": "screenshot-003",
+          "cycleId": "gotsis-20261012",
+          "capturedAt": "2026-10-12T11:49:00+09:00",
+          "spawnAt": "2026-10-12T19:16:00+09:00",
+          "precisionSeconds": 120
+        },
+        {
+          "source": "screenshot-004",
+          "cycleId": "gotsis-20261012",
+          "capturedAt": "2026-10-12T12:01:00+09:00",
+          "spawnAt": "2026-10-12T19:17:00+09:00",
+          "precisionSeconds": 120
+        }
+      ]
+    },
+    {
+      "id": "alastor",
+      "name": "알라스토르",
+      "level": 55,
+      "region": "자하브",
+      "area": "무법자의 길목",
+      "respawnHours": 8,
+      "portrait": [
+        2000,
+        580
+      ],
+      "observations": [
+        {
+          "source": "readme-001",
+          "cycleId": "alastor-initial",
+          "capturedAt": "2026-10-11T16:37:00+09:00",
+          "spawnAt": "2026-10-11T20:59:00+09:00",
+          "precisionSeconds": 120
+        },
+        {
+          "source": "screenshot-003",
+          "cycleId": "alastor-20261012",
+          "capturedAt": "2026-10-12T11:49:00+09:00",
+          "spawnAt": "2026-10-12T12:59:00+09:00",
+          "precisionSeconds": 120
+        },
+        {
+          "source": "screenshot-004",
+          "cycleId": "alastor-20261012",
+          "capturedAt": "2026-10-12T12:01:00+09:00",
+          "spawnAt": "2026-10-12T12:59:10+09:00",
+          "precisionSeconds": 60
+        }
+      ]
+    },
+    {
+      "id": "iokantos",
+      "name": "이오칸토스",
+      "level": 45,
+      "region": "테살리아",
+      "area": "아르보리아스 폐허",
+      "respawnHours": 12,
+      "portrait": [
+        1050,
+        580
+      ],
+      "observations": [
+        {
+          "source": "readme-001",
+          "cycleId": "iokantos-initial",
+          "capturedAt": "2026-10-11T16:37:00+09:00",
+          "spawnAt": "2026-10-11T16:41:15+09:00",
+          "precisionSeconds": 60
+        },
+        {
+          "source": "screenshot-003",
+          "cycleId": "iokantos-20261012",
+          "capturedAt": "2026-10-12T11:49:00+09:00",
+          "spawnAt": "2026-10-12T16:41:00+09:00",
+          "precisionSeconds": 120
+        },
+        {
+          "source": "screenshot-004",
+          "cycleId": "iokantos-20261012",
+          "capturedAt": "2026-10-12T12:01:00+09:00",
+          "spawnAt": "2026-10-12T16:41:00+09:00",
+          "precisionSeconds": 120
+        }
+      ]
+    },
+    {
+      "id": "kini",
+      "name": "키니 러우리",
+      "level": 45,
+      "region": "테살리아",
+      "area": "금지된 숲",
+      "respawnHours": 12,
+      "portrait": [
+        1500,
+        580
+      ],
+      "observations": [
+        {
+          "source": "readme-001",
+          "cycleId": "kini-initial",
+          "capturedAt": "2026-10-11T16:37:00+09:00",
+          "spawnAt": "2026-10-11T16:44:10+09:00",
+          "precisionSeconds": 60
+        },
+        {
+          "source": "screenshot-003",
+          "cycleId": "kini-20261012",
+          "capturedAt": "2026-10-12T11:49:00+09:00",
+          "spawnAt": "2026-10-12T16:44:00+09:00",
+          "precisionSeconds": 120
+        },
+        {
+          "source": "screenshot-004",
+          "cycleId": "kini-20261012",
+          "capturedAt": "2026-10-12T12:01:00+09:00",
+          "spawnAt": "2026-10-12T16:44:00+09:00",
+          "precisionSeconds": 120
+        }
+      ]
+    },
+    {
+      "id": "thrason",
+      "name": "트라손",
+      "level": 40,
+      "region": "테살리아",
+      "area": "고대 신전 유적지",
+      "respawnHours": 8,
+      "portrait": [
+        2000,
+        315
+      ],
+      "observations": [
+        {
+          "source": "readme-001",
+          "cycleId": "thrason-initial",
+          "capturedAt": "2026-10-11T16:37:00+09:00",
+          "spawnAt": "2026-10-11T16:57:16+09:00",
+          "precisionSeconds": 60
+        },
+        {
+          "source": "screenshot-003",
+          "cycleId": "thrason-20261012",
+          "capturedAt": "2026-10-12T11:49:00+09:00",
+          "spawnAt": "2026-10-12T16:57:00+09:00",
+          "precisionSeconds": 120
+        },
+        {
+          "source": "screenshot-004",
+          "cycleId": "thrason-20261012",
+          "capturedAt": "2026-10-12T12:01:00+09:00",
+          "spawnAt": "2026-10-12T16:58:00+09:00",
+          "precisionSeconds": 120
+        }
+      ]
+    },
+    {
+      "id": "chrysophagos",
+      "name": "크리소파고스",
+      "level": 35,
+      "region": "테살리아",
+      "area": "테살리아 평원",
+      "respawnHours": 8,
+      "portrait": [
+        1070,
+        315
+      ],
+      "observations": [
+        {
+          "source": "readme-001",
+          "cycleId": "chrysophagos-initial",
+          "capturedAt": "2026-10-11T16:37:00+09:00",
+          "spawnAt": "2026-10-11T20:21:00+09:00",
+          "precisionSeconds": 120
+        },
+        {
+          "source": "screenshot-003",
+          "cycleId": "chrysophagos-20261012",
+          "capturedAt": "2026-10-12T11:49:00+09:00",
+          "spawnAt": "2026-10-12T12:20:01+09:00",
+          "precisionSeconds": 60
+        },
+        {
+          "source": "screenshot-004",
+          "cycleId": "chrysophagos-20261012",
+          "capturedAt": "2026-10-12T12:01:00+09:00",
+          "spawnAt": "2026-10-12T12:20:17+09:00",
+          "precisionSeconds": 60
+        }
+      ]
+    },
+    {
+      "id": "amorphos",
+      "name": "아모르포스",
+      "level": 35,
+      "region": "테살리아",
+      "area": "침식된 경작지",
+      "respawnHours": 8,
+      "portrait": [
+        1525,
+        315
+      ],
+      "observations": [
+        {
+          "source": "readme-001",
+          "cycleId": "amorphos-initial",
+          "capturedAt": "2026-10-11T16:37:00+09:00",
+          "spawnAt": "2026-10-11T20:24:00+09:00",
+          "precisionSeconds": 120
+        },
+        {
+          "source": "screenshot-003",
+          "cycleId": "amorphos-20261012",
+          "capturedAt": "2026-10-12T11:49:00+09:00",
+          "spawnAt": "2026-10-12T12:22:31+09:00",
+          "precisionSeconds": 60
+        },
+        {
+          "source": "screenshot-004",
+          "cycleId": "amorphos-20261012",
+          "capturedAt": "2026-10-12T12:01:00+09:00",
+          "spawnAt": "2026-10-12T12:22:46+09:00",
+          "precisionSeconds": 60
+        }
+      ]
+    }
+  ]
+}

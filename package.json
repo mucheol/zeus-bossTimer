@@ -1,0 +1,21 @@
+{
+  "name": "zeus-boss-timer",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/check-data.js && wrangler dev --test-scheduled",
+    "test": "node --test",
+    "check": "node scripts/check-data.js && wrangler deploy --dry-run",
+    "keys": "node scripts/create-keys.js",
+    "db:local": "wrangler d1 migrations apply zeus-boss-timer --local",
+    "db:remote": "wrangler d1 migrations apply zeus-boss-timer --remote",
+    "deploy": "npm run test && npm run check && wrangler deploy"
+  },
+  "dependencies": {
+    "@block65/webcrypto-web-push": "2.0.0"
+  },
+  "devDependencies": {
+    "wrangler": "4.149.0"
+  }
+}

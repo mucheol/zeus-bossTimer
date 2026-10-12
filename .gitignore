@@ -6,3 +6,11 @@
 dist/
 build/
 latest.json
+node_modules/
+.wrangler/
+.dev.vars
+.env*
+!.env.example
+test-results/
+playwright-report/
+.playwright-mcp/

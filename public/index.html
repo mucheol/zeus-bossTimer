@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#111715">
+  <meta name="description" content="공통 관측을 기준으로 확인하는 제우스 보스 타이머. Android와 iPhone 홈 화면에서 사용하세요.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <link rel="stylesheet" href="/app.css">
+  <title>제우스 · 보스 타이머</title>
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <a class="brand" href="/" aria-label="제우스 타이머 홈"><span class="brand-mark">ϟ</span><span>ZEUS<span class="brand-sub">BOSS TIMER</span></span></a>
+      <button id="settings-open" class="icon-button" aria-label="알림 및 설치 설정"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M8 4v6m8 4v6"/></svg></button>
+    </header>
+    <main>
+      <section class="intro">
+        <div class="section-line"><h1>보스 <span>시간표</span></h1><span id="network" class="network">연결 확인 중</span></div>
+        <div class="observation-line"><span id="source-time">관측 자료 불러오는 중</span><button id="refresh" class="text-button">새로고침 ↻</button></div>
+      </section>
+      <section class="invasion" aria-labelledby="invasion-title">
+        <div class="section-line"><h2 id="invasion-title"><span class="section-icon">ϟ</span> 침공 보스</h2><span class="tiny-label">매일 · 한국시간 정각</span></div>
+        <div class="invasion-buttons" id="invasion-buttons">
+          <button data-hour="0" aria-pressed="false"><strong>00:00</strong><span>알림 꺼짐</span></button>
+          <button data-hour="12" aria-pressed="false"><strong>12:00</strong><span>알림 꺼짐</span></button>
+          <button data-hour="18" aria-pressed="false"><strong>18:00</strong><span>알림 꺼짐</span></button>
+        </div>
+        <p class="invasion-note">선택한 시간에만 알림 · 사전 알림 없음</p>
+      </section>
+      <section class="boss-section" aria-labelledby="boss-title">
+        <div class="section-line boss-heading"><h2 id="boss-title">필드 보스 <span id="boss-count">09</span></h2><button id="reorder" class="text-button" aria-pressed="false">순서 편집</button></div>
+        <div id="order-actions" class="order-actions" hidden><span>화살표로 순서를 바꿔 주세요.</span><button id="reset-order" class="text-button">레벨순 초기화</button></div>
+        <div id="boss-list" class="boss-grid" aria-label="보스 목록"><p class="loading">시간표를 불러오고 있습니다.</p></div>
+      </section>
+      <aside class="notice"><span>ⓘ</span><p>관측 시각의 초는 미상입니다. 처치 시간에 따라 다음 회차가 달라질 수 있어요. <strong>추정은 다음 한 회차까지만</strong> 안내합니다.</p></aside>
+      <button id="connect-banner" class="connect-banner"><span class="connect-icon">♧</span><span><strong>화면을 닫아도 보스 알림</strong><small>홈 화면에 추가하고 알림을 연결하세요.</small></span><span aria-hidden="true">↗</span></button>
+    </main>
+    <footer><span>ZEUS BOSS TIMER</span><span>모든 시간은 한국시간 · KST</span></footer>
+  </div>
+  <dialog id="settings">
+    <div class="dialog-heading"><h2>알림 · 앱 설정</h2><button id="settings-close" class="icon-button" aria-label="설정 닫기">×</button></div>
+    <div id="push-status" class="push-status" role="status">알림 연결을 확인하고 있습니다.</div>
+    <p class="settings-copy">앱을 닫거나 화면을 잠가도 시스템 알림을 받습니다. 소리와 진동은 휴대폰의 알림 설정을 따릅니다.</p>
+    <div class="push-actions"><button id="connect" class="primary">알림 연결</button><button id="test-push" class="secondary" disabled>10초 뒤 테스트</button><button id="disconnect" class="text-button" hidden>연결 해제</button></div>
+    <p class="small-note">테스트를 누른 뒤 화면을 잠가 수신을 확인하세요.</p>
+    <hr>
+    <h3>필드 보스 알림 시점</h3><p class="small-note">목록에서 알림을 켠 보스에만 적용합니다.</p>
+    <div id="offsets" class="offsets"><button data-offset="600" aria-pressed="false">10분 전</button><button data-offset="300" aria-pressed="true">5분 전</button><button data-offset="60" aria-pressed="false">1분 전</button><button data-offset="0" aria-pressed="true">예정 시각</button></div>
+    <p id="sync-status" class="small-note" role="status"></p>
+    <hr>
+    <h3>홈 화면에 추가</h3>
+    <div id="install-guide" class="install-guide"><p><strong>iPhone</strong> Safari의 공유 → 홈 화면에 추가 → 추가한 앱에서 알림 연결. iOS 16.4 이상이 필요합니다.</p><p><strong>Android</strong> Chrome 메뉴 → 홈 화면에 추가 또는 앱 설치.</p></div>
+    <button id="install" class="secondary" hidden>앱 설치</button>
+    <p class="small-note">인터넷 연결과 알림 허용이 필요합니다. 집중 모드·절전·네트워크 상황에 따라 도착이 늦어질 수 있습니다. 침공 정각과 일반 보스 알림은 분 단위로 발송을 확인합니다.</p>
+  </dialog>
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+  <div id="update-banner" class="update-banner" hidden>새 화면이 준비됐어요.<button id="apply-update">업데이트</button></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

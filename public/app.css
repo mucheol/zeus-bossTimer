@@ -1,0 +1,70 @@
+:root{color-scheme:dark;--bg:#111715;--panel:#1b2320;--line:#303a34;--muted:#94a197;--text:#edf0e8;--gold:#d8c291;--mint:#a7d8bd;--font:-apple-system,BlinkMacSystemFont,"Segoe UI","Malgun Gothic",sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;line-height:1.5;-webkit-tap-highlight-color:transparent}
+button,a{touch-action:manipulation}
+button{font:inherit;color:inherit;cursor:pointer;border:0;background:transparent}
+button:disabled{opacity:.42;cursor:default}
+button:focus-visible,a:focus-visible{outline:2px solid var(--mint);outline-offset:4px}
+a{color:inherit;text-decoration:none}
+.app{max-width:800px;margin:auto;padding:14px 18px calc(20px + env(safe-area-inset-bottom))}
+.header{display:flex;align-items:center;justify-content:space-between;padding:4px 0 15px;border-bottom:1px solid var(--line)}
+.brand{display:flex;gap:11px;align-items:center;font-size:22px;letter-spacing:3px;font-weight:750;line-height:1.1}
+.brand-mark{color:var(--gold);font-size:42px;font-family:Georgia,serif;font-weight:normal;line-height:1}
+.brand-sub{display:block;font-size:8px;letter-spacing:2.6px;color:var(--muted);margin-top:6px}
+.icon-button{min-width:44px;min-height:44px;display:grid;place-items:center;border:1px solid var(--line);border-radius:12px;font-size:28px;color:var(--muted)}
+.icon-button svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round}
+.intro{padding:19px 0 14px}
+.network{margin-left:auto;border:1px solid var(--line);border-radius:20px;padding:2px 7px;font-size:10px;letter-spacing:0;color:var(--muted)}
+h1{margin:0;font-size:24px;letter-spacing:-1px;line-height:1.3;font-weight:700}h1 span{color:var(--gold)}
+.observation-line{display:flex;justify-content:space-between;align-items:center;margin-top:7px;font-size:10px;color:var(--muted);gap:8px}
+.text-button{min-height:38px;font-size:11px;color:var(--muted);padding:6px;white-space:nowrap;text-decoration:underline;text-underline-offset:4px;text-decoration-color:var(--line)}
+.invasion{background:#20281f;border:1px solid #3b4434;border-radius:14px;padding:12px 13px 9px}
+.section-line{display:flex;align-items:center;justify-content:space-between;gap:8px}
+h2{font-size:14px;margin:0;font-weight:650;letter-spacing:-.3px}.section-icon{color:var(--gold);font-family:Georgia,serif;font-size:20px;vertical-align:middle}
+.tiny-label{font-size:10px;color:var(--muted)}
+.invasion-buttons{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+.invasion-buttons button{background:#151c16;border:1px solid #364032;border-radius:9px;min-height:52px;padding:6px}
+.invasion-buttons strong{display:block;font-size:18px;font-weight:550;letter-spacing:.5px;font-variant-numeric:tabular-nums}
+.invasion-buttons span{display:block;font-size:10px;color:var(--muted);margin-top:2px}
+.invasion-buttons button[aria-pressed=true]{border-color:var(--gold);background:#3a3a2a;color:#f5dfac}
+.invasion-buttons button[aria-pressed=true] span{color:#e2cf9e}
+.invasion-note{font-size:10px;color:var(--muted);margin:6px 0 0;text-align:center}
+.boss-heading{margin:15px 0 5px}.boss-heading h2 span{color:var(--muted);margin-left:6px;font-size:11px;font-weight:400}
+.boss-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.boss-card{position:relative;border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:10px;min-width:0;overflow:hidden}
+.boss-top{display:flex;align-items:center;gap:8px;min-width:0}
+.portrait{flex-shrink:0;width:36px;height:40px;border-radius:7px;background-image:url('/images/bosses.png');background-size:1145.455% 490.909%;background-repeat:no-repeat;border:1px solid #4b5040}
+.boss-identity{min-width:0}.boss-identity h3{margin:0;font-size:12px;font-weight:650;letter-spacing:-.6px;overflow-wrap:anywhere}
+.boss-meta{color:var(--muted);font-size:9px;white-space:nowrap;letter-spacing:-.3px}
+.boss-area{display:block;color:var(--muted);font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.4px}
+.countdown{margin:8px 0 2px;color:var(--text);font-size:23px;font-weight:650;letter-spacing:-1px;line-height:1.3;font-variant-numeric:tabular-nums;white-space:nowrap}
+.boss-card.soon .countdown{color:var(--gold)}
+.boss-card.stale .countdown{font-size:20px;color:var(--muted)}
+.spawn-time{color:var(--muted);font-size:10px;min-height:15px}
+.card-bottom{display:flex;justify-content:space-between;align-items:center;margin-top:6px;padding-top:3px;border-top:1px solid var(--line);gap:3px}
+.kind{font-size:9px;color:var(--mint)}.predicted .kind{color:var(--gold)}.stale .kind{color:var(--muted)}
+.boss-alert{min-width:44px;min-height:32px;font-size:10px;color:var(--muted);display:flex;gap:4px;align-items:center;justify-content:center;border-radius:8px;padding:5px 7px}
+.boss-alert svg{height:14px;width:14px;stroke:currentColor;stroke-width:1.5;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.boss-alert[aria-pressed=true]{background:#2a3c31;color:var(--mint)}
+.precision{font-size:9px;color:var(--muted);margin:2px 0 0;letter-spacing:-.2px}.observed .precision{display:none}
+.move-buttons{display:flex;gap:8px;margin-top:8px}.move-buttons button{border:1px solid var(--line);border-radius:6px;flex:1;min-height:38px}
+.order-actions{font-size:10px;color:var(--muted);margin-bottom:10px;align-items:center;justify-content:space-between}.order-actions:not([hidden]){display:flex}
+.notice{display:flex;align-items:flex-start;gap:9px;color:var(--muted);margin:19px 0;font-size:10px;line-height:1.75}.notice p{margin:0}.notice>span{color:var(--gold);font-size:14px}.notice strong{font-weight:500;color:#c0c8bc}
+.connect-banner{display:flex;width:100%;align-items:center;text-align:left;padding:15px 14px;border:1px solid #425147;border-radius:12px;gap:12px;background:#1c2a22}
+.connect-icon{font-size:25px;color:var(--mint)}.connect-banner strong{font-size:12px;font-weight:600}.connect-banner small{display:block;color:var(--muted);font-size:10px;margin-top:3px}.connect-banner>span:last-child{margin-left:auto;color:var(--mint)}
+footer{display:flex;justify-content:space-between;color:#89988c;font-size:8px;letter-spacing:.5px;margin-top:26px;padding-top:16px;border-top:1px solid var(--line)}
+dialog{max-width:460px;width:calc(100% - 28px);max-height:90dvh;border:1px solid #445046;border-radius:20px;background:var(--panel);color:var(--text);padding:22px;box-shadow:0 20px 80px #0008;overscroll-behavior:contain}
+dialog::backdrop{background:#060a08b8;backdrop-filter:blur(4px)}
+.dialog-heading{display:flex;justify-content:space-between;align-items:center}.dialog-heading h2{font-size:19px}.dialog-heading .icon-button{border:0}
+.push-status{color:var(--mint);font-size:12px;padding:14px 0 4px}.settings-copy{color:var(--muted);font-size:12px;line-height:1.7;margin:8px 0 16px}
+.push-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}.primary,.secondary{min-height:44px;padding:10px 16px;border-radius:10px;font-size:12px}.primary{background:var(--mint);color:#15221b;font-weight:650}.secondary{border:1px solid #536458;background:#263129}
+.small-note{font-size:10px;line-height:1.8;color:var(--muted);margin:10px 0}hr{border:0;border-top:1px solid var(--line);margin:24px 0}dialog h3{font-size:13px;font-weight:600;margin:0}
+.offsets{display:flex;gap:6px;flex-wrap:wrap}.offsets button{border:1px solid #485448;border-radius:8px;font-size:11px;padding:9px;min-height:44px;flex:1;white-space:nowrap}.offsets button[aria-pressed=true]{background:#344536;border-color:var(--mint);color:var(--mint)}
+.install-guide{font-size:11px;color:var(--muted);line-height:1.9}.install-guide strong{color:var(--text);margin-right:5px}
+#toast{position:fixed;bottom:calc(25px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);background:#e5e8dc;color:#162218;padding:12px 18px;max-width:calc(100% - 30px);width:max-content;border-radius:12px;z-index:10;font-size:12px;box-shadow:0 5px 25px #0008}
+.update-banner{position:fixed;bottom:0;left:0;right:0;background:var(--gold);color:#20251e;padding:15px;text-align:center;z-index:11;font-size:12px}.update-banner button{margin-left:15px;text-decoration:underline;font-weight:700}
+.loading{color:var(--muted);grid-column:1/-1;padding:20px 0}
+[hidden]{display:none!important}
+@media(min-width:600px){.app{padding-top:30px}.intro{padding-top:36px}h1{font-size:42px}.boss-grid{gap:14px}.boss-card{padding:18px}.portrait{width:60px;height:65px}.boss-identity h3{font-size:16px}.boss-meta{font-size:11px}.countdown{font-size:32px}.boss-card.stale .countdown{font-size:28px}.spawn-time,.kind,.precision{font-size:11px}.boss-alert{font-size:12px}.invasion{padding:20px}.invasion-buttons button{min-height:72px}.observation-line{font-size:12px}.notice{font-size:12px}}
+@media(max-width:360px){.app{padding-left:14px;padding-right:14px}.boss-card{padding:10px}.portrait{width:34px;height:42px}.boss-top{gap:6px}.boss-identity h3{font-size:11px}.countdown{font-size:21px}.tiny-label{font-size:9px}}
+@media(prefers-reduced-motion:no-preference){button{transition:background .15s,border-color .15s}}
