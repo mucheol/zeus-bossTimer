@@ -431,7 +431,7 @@ function openBossEditor(id) {
   if (!boss) return;
   editedBoss = id;
   const minutes = Math.max(0, Math.ceil((bossTiming(boss).at - Date.now()) / 60000));
-  $('#boss-edit-title').textContent = `${boss.name} · 공통 시간`;
+  $('#boss-edit-name').textContent = `${boss.name} · Lv.${boss.level} · ${boss.region}`;
   $('#boss-hours').value = Math.floor(minutes / 60);
   $('#boss-minutes').value = minutes % 60;
   $('#boss-edit-status').textContent = '';

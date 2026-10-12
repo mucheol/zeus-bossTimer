@@ -76,10 +76,11 @@
     <div id="admin-authorized" hidden><p class="settings-copy">관리자 모드입니다. 목록의 보스를 눌러 공통 시간을 수정하세요.</p><button id="admin-logout" class="secondary">관리자 종료</button></div>
     <p id="admin-status" class="small-note" role="status"></p>
   </dialog>
-  <dialog id="boss-editor">
-    <div class="dialog-heading"><h2 id="boss-edit-title">공통 시간 수정</h2><button id="boss-edit-close" class="icon-button" aria-label="시간 수정 닫기">×</button></div>
-    <p class="settings-copy">저장한 시점부터 입력한 시간·분을 적용합니다. 기존의 남은 초는 이어 붙이지 않습니다. 모든 이용자에게 동일하게 반영됩니다.</p>
-    <form id="boss-edit-form"><div class="time-inputs"><label>시간<input id="boss-hours" type="number" min="0" max="48" step="1" inputmode="numeric" required></label><label>분<input id="boss-minutes" type="number" min="0" max="59" step="1" inputmode="numeric" required></label></div><p class="small-note">0시간 0분은 다음 리스폰 카운트다운을 시작합니다.</p><button id="boss-edit-save" class="primary" type="submit">저장하기</button></form>
+  <dialog id="boss-editor" aria-labelledby="boss-edit-title" aria-describedby="boss-edit-description">
+    <div class="dialog-heading"><h2 id="boss-edit-title">남은시간 설정하기</h2><button id="boss-edit-close" class="icon-button" aria-label="시간 수정 닫기">×</button></div>
+    <p id="boss-edit-name" class="settings-copy"></p>
+    <p id="boss-edit-description" class="settings-copy">지금부터 보스 출현까지 남은 시간과 분을 입력하세요. 예: 1시간 20분 뒤 출현 → 남은 시간 1, 남은 분 20. 저장 버튼을 누른 시점부터 카운트다운하며 모든 이용자에게 반영됩니다.</p>
+    <form id="boss-edit-form"><div class="time-inputs"><label>남은 시간<input id="boss-hours" type="number" min="0" max="48" step="1" inputmode="numeric" required></label><label>남은 분<input id="boss-minutes" type="number" min="0" max="59" step="1" inputmode="numeric" required></label></div><p class="small-note">최대 48시간 · 분은 0~59 입력. 0시간 0분은 다음 리스폰 카운트다운을 시작합니다.</p><button id="boss-edit-save" class="primary" type="submit">저장하기</button></form>
     <p id="boss-edit-status" class="small-note" role="status"></p>
   </dialog>
   <div id="toast" role="status" aria-live="polite" hidden></div>
