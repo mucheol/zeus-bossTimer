@@ -205,6 +205,21 @@ function applyCatalog(next, offline = false) {
   renderSettings();
 }
 
+// 서버 응답을 기다리지 않고 보관한 공통 시각으로 카운트다운을 복원합니다.
+async function restoreCatalog() {
+  try {
+    if (!('caches' in globalThis)) return;
+    const names = (await caches.keys()).filter(name => name.startsWith('zeus-')).reverse();
+    for (const name of names) {
+      const response = await (await caches.open(name)).match('/data/catalog.json');
+      if (!response?.ok) continue;
+      const next = await response.json();
+      if (!catalog && Array.isArray(next.bosses) && next.bosses.length) applyCatalog(next, true);
+      return;
+    }
+  } catch { /* 보관 자료가 없으면 일반 자료 요청으로 계속 진행합니다. */ }
+}
+
 // 최신 공통 자료를 읽고 오프라인 캐시 여부를 명확히 표시합니다.
 async function refresh() {
   if (adminWriting) return;
@@ -220,7 +235,7 @@ async function refresh() {
     }
   } catch (error) {
     if (requestId !== catalogRequest) return;
-    $('#network').textContent = '연결 끊김';
+    $('#network').textContent = catalog ? '오프라인 자료' : '연결 끊김';
     if (!catalog) {
       $('#boss-list').innerHTML = '<p class="loading">자료를 불러오지 못했습니다. 연결을 확인하고 새로고침해 주세요.</p>';
       toast(error.message);
@@ -725,5 +740,6 @@ window.addEventListener('offline', () => { $('#network').textContent = '오프�
 // 자료 요청과 별개로 기기 시각에 맞춰 화면을 계속 갱신합니다.
 setInterval(tick, 1000);
 setInterval(() => { if (!document.hidden) { void refresh(); if (!config || !pushKnown || (!connected && pending && saved.token)) void initializePush(); else void syncPreferences(); } }, 15000);
+void restoreCatalog();
 void refresh().then(initializePush);
 void restoreAdmin();

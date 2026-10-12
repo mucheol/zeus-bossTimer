@@ -121,3 +121,28 @@ test('오프라인 캐시보다 메모리의 최신 관리자 자료 유지', as
   assert.equal(ui.run('catalog.revision'), 'new-admin');
   assert.equal(ui.elements.get('#network').textContent, '오프라인 자료');
 });
+
+// 통신 없이 재실행해도 남은 분을 저장해 재사용하지 않고 현재 시각으로 계산합니다.
+test('오프라인 재실행은 캐시의 절대 시각으로 복원하고 최신 응답을 보호', async () => {
+  const ui = app();
+  let release;
+  ui.context.caches = {
+    keys: async () => ['unrelated-cache', 'zeus-current'],
+    open: async () => ({ match: async () => new Promise(resolve => { release = () => resolve(Response.json(catalog)); }) })
+  };
+  const restoration = ui.run('restoreCatalog()');
+  await new Promise(resolve => setImmediate(resolve));
+  release();
+  await restoration;
+  assert.equal(ui.run('catalog.revision'), catalog.revision);
+  assert.equal(ui.elements.get('#network').textContent, '오프라인 자료');
+  const again = app();
+  again.context.caches = ui.context.caches;
+  const late = again.run('restoreCatalog()');
+  await new Promise(resolve => setImmediate(resolve));
+  again.context.next = { ...catalog, revision: 'newer-admin' };
+  again.run('applyCatalog(next)');
+  release();
+  await late;
+  assert.equal(again.run('catalog.revision'), 'newer-admin');
+});

@@ -16,6 +16,11 @@ for (const boss of afternoonCatalog.bosses) {
   boss.observations = boss.observations.filter(observation => Date.parse(observation.capturedAt) <= Date.parse(afternoonCatalog.capturedAt));
 }
 
+const preciseCatalog = { ...structuredClone(catalog), revision: '2026-10-12-screenshot-007-v1', source: 'screenshot-007', capturedAt: '2026-10-12T15:29:00+09:00', capturedSecondsKnown: true };
+for (const boss of preciseCatalog.bosses) {
+  boss.observations = boss.observations.filter(observation => Date.parse(observation.capturedAt) <= Date.parse(preciseCatalog.capturedAt));
+}
+
 // 이전 시점은 새 선택으로 이관하며 전체 중지는 선택 자체를 지우지 않습니다.
 test('1·3·5분 시점·기존 설정 이관·전체 알림 중지와 복원', () => {
   assert.deepEqual(defaultPreferences(), { enabled: true, bosses: [], offsets: [300], invasion: [] });
@@ -174,26 +179,26 @@ test('13:52 관측 9마리 갱신, 알라스토르만 새 회차, 기존 연속 
 
 // 촬영 초 확인과 분 표시 오차를 분리하고 날짜 넘김·새 회차를 보존합니다.
 test('15:29:00 정각 관측 9마리, 촬영 초 확인·분 오차·두 새 회차와 이력 보존', () => {
-  assert.equal(catalog.revision, '2026-10-12-screenshot-007-v1');
-  assert.equal(catalog.source, 'screenshot-007');
-  assert.equal(catalog.capturedAt, '2026-10-12T15:29:00+09:00');
-  assert.equal(catalog.capturedSecondsKnown, true);
-  assert.match(koreanTime(Date.parse(catalog.capturedAt), true, true), /15:29:00/);
-  assert.ok(!koreanTime(Date.parse(catalog.capturedAt), true).includes('15:29:00'));
+  assert.equal(preciseCatalog.revision, '2026-10-12-screenshot-007-v1');
+  assert.equal(preciseCatalog.source, 'screenshot-007');
+  assert.equal(preciseCatalog.capturedAt, '2026-10-12T15:29:00+09:00');
+  assert.equal(preciseCatalog.capturedSecondsKnown, true);
+  assert.match(koreanTime(Date.parse(preciseCatalog.capturedAt), true, true), /15:29:00/);
+  assert.ok(!koreanTime(Date.parse(preciseCatalog.capturedAt), true).includes('15:29:00'));
   const expected = { tripork: [630, '2026-10-13T01:59:00+09:00'], bedix: [386, '2026-10-12T21:55:00+09:00'], gotsis: [228, '2026-10-12T19:17:00+09:00'], alastor: [332, '2026-10-12T21:01:00+09:00'], iokantos: [73, '2026-10-12T16:42:00+09:00'], kini: [75, '2026-10-12T16:44:00+09:00'], thrason: [89, '2026-10-12T16:58:00+09:00'], chrysophagos: [292, '2026-10-12T20:21:00+09:00'], amorphos: [295, '2026-10-12T20:24:00+09:00'] };
-  for (const boss of catalog.bosses) {
+  for (const boss of preciseCatalog.bosses) {
     const before = afternoonCatalog.bosses.find(item => item.id === boss.id);
     const latest = boss.observations.at(-1);
     const nextCycle = ['bedix', 'tripork'].includes(boss.id);
     assert.deepEqual(boss.observations.slice(0, -1), before.observations);
-    assert.equal(latest.source, catalog.source);
-    assert.equal(latest.capturedAt, catalog.capturedAt);
+    assert.equal(latest.source, preciseCatalog.source);
+    assert.equal(latest.capturedAt, preciseCatalog.capturedAt);
     assert.equal(latest.capturedSecondsKnown, true);
     assert.equal(latest.remainingSecondsKnown, false);
     assert.equal(latest.precisionSeconds, 60);
     assert.equal(latest.spawnAt, expected[boss.id][1]);
     assert.equal(Date.parse(latest.spawnAt) - Date.parse(latest.capturedAt), expected[boss.id][0] * 60000);
-    assert.equal(bossTiming(boss, Date.parse(catalog.capturedAt)).at, Date.parse(latest.spawnAt));
+    assert.equal(bossTiming(boss, Date.parse(preciseCatalog.capturedAt)).at, Date.parse(latest.spawnAt));
     if (nextCycle) {
       assert.notEqual(latest.cycleId, before.observations.at(-1).cycleId);
       assert.equal(latest.consecutiveFrom, before.observations.at(-1).cycleId);
@@ -203,7 +208,51 @@ test('15:29:00 정각 관측 9마리, 촬영 초 확인·분 오차·두 새 회
     }
     assert.equal(estimate(boss).sampleCount, estimate(before).sampleCount + Number(nextCycle));
   }
-  assert.equal(catalog.bosses.reduce((count, boss) => count + boss.observations.length, 0), 53);
+  assert.equal(preciseCatalog.bosses.reduce((count, boss) => count + boss.observations.length, 0), 53);
+});
+
+// 초가 확인된 같은 회차의 보정은 리스폰 표본을 추가하지 않습니다.
+test('16:30:20 관측 9마리와 초 표시 3마리 보정·이력 보존', () => {
+  assert.equal(catalog.source, 'screenshot-008');
+  assert.equal(catalog.capturedAt, '2026-10-12T16:30:20+09:00');
+  const expected = { tripork: '2026-10-13T01:59:20+09:00', bedix: '2026-10-12T21:55:20+09:00', gotsis: '2026-10-12T19:16:20+09:00', alastor: '2026-10-12T21:00:20+09:00', iokantos: '2026-10-12T16:40:46+09:00', kini: '2026-10-12T16:43:42+09:00', thrason: '2026-10-12T16:57:07+09:00', chrysophagos: '2026-10-12T20:21:20+09:00', amorphos: '2026-10-12T20:23:20+09:00' };
+  for (const boss of catalog.bosses) {
+    const previous = preciseCatalog.bosses.find(item => item.id === boss.id);
+    const last = boss.observations.at(-1);
+    const exact = ['iokantos', 'kini', 'thrason'].includes(boss.id);
+    assert.deepEqual(boss.observations.slice(0, -1), previous.observations);
+    assert.equal(last.source, catalog.source);
+    assert.equal(last.capturedAt, catalog.capturedAt);
+    assert.equal(last.spawnAt, expected[boss.id]);
+    assert.equal(last.capturedSecondsKnown, true);
+    assert.equal(last.remainingSecondsKnown, exact);
+    assert.equal(last.precisionSeconds, exact ? 1 : 60);
+    assert.equal(last.cycleId, previous.observations.at(-1).cycleId);
+    assert.equal(last.consecutiveFrom, previous.observations.at(-1).consecutiveFrom);
+    assert.equal(estimate(boss).sampleCount, estimate(previous).sampleCount);
+    assert.ok(estimate(boss).killSeconds >= 0);
+  }
+  assert.equal(catalog.bosses.reduce((sum, boss) => sum + boss.observations.length, 0), 62);
+  const boss = catalog.bosses.find(item => item.id === 'iokantos');
+  const start = Date.parse(catalog.capturedAt);
+  assert.equal(remaining(bossTiming(boss, start).at, start), '10분');
+  const reopened = start + 5 * 60000;
+  assert.equal(remaining(bossTiming(boss, reopened).at, reopened), '5분');
+  assert.equal(bossTiming(boss, reopened).at, Date.parse(expected.iokantos));
+});
+
+// 처치시간은 임의 상한 없이 누적 보정하고 기본 리스폰 자체는 유지합니다.
+test('고정 리스폰 유지와 처치시간 상한 없는 누적 보정', () => {
+  const at = Date.parse('2026-10-12T00:00:00+09:00');
+  for (const [precision, delay] of [[1, 120], [60, 120], [120, 120], [1, 900]]) {
+    const boss = { region: '자하브', respawnHours: 8, observations: [
+      { source: 'screenshot-1', cycleId: 'a', capturedAt: new Date(at - 60000).toISOString(), spawnAt: new Date(at).toISOString(), precisionSeconds: precision },
+      { source: 'screenshot-2', cycleId: 'b', consecutiveFrom: 'a', capturedAt: new Date(at + 8 * 3600000).toISOString(), spawnAt: new Date(at + 8 * 3600000 + delay * 1000).toISOString(), precisionSeconds: precision }
+    ] };
+    assert.ok(estimate(boss).killSeconds > 30 && estimate(boss).killSeconds < delay);
+    assert.equal(estimate(boss).interval, 8 * 3600000 + estimate(boss).killSeconds * 1000);
+    assert.equal(estimate(boss).sampleCount, 1);
+  }
 });
 
 // 지난 회차는 처치된 것으로 가정하되 추정을 실제 관측으로 학습하지 않습니다.
@@ -246,11 +295,11 @@ test('분 단위 남은 시간, 시·분 경계, 기기 시각 변경과 만료'
   const now = Date.parse('2026-10-12T13:52:00+09:00');
   const at = now + 3600000;
   assert.equal(remaining(at, now), '1시간 0분');
-  assert.equal(remaining(at, now + 1000), '1시간 0분');
+  assert.equal(remaining(at, now + 1000), '59분');
   assert.equal(remaining(at, now + 60000), '59분');
   assert.equal(remaining(at, now + 3540000), '1분');
-  assert.equal(remaining(at, now + 3541000), '1분');
-  assert.equal(remaining(at, now + 3599999), '1분');
+  assert.equal(remaining(at, now + 3541000), '1분 미만');
+  assert.equal(remaining(at, now + 3599999), '1분 미만');
   assert.equal(remaining(at, at), '0분');
   assert.equal(remaining(at, at + 60000), '0분');
   assert.equal(remaining(at, now - 60000), '1시간 1분');

@@ -61,8 +61,8 @@ export function estimate(boss) {
     if (count < 1 || count > 30) continue;
     const uncertainty = ((before.precisionSeconds || 0) + (after.precisionSeconds || 0)) / count;
     const delay = (delta / count - base) / 1000;
-    if (delay < -uncertainty || delay > 300 + uncertainty) continue;
-    intervals.push({ delay: Math.min(300, Math.max(0, delay)), weight: 1 / Math.max(1, uncertainty / 30), manual });
+    if (delay < -uncertainty) continue;
+    intervals.push({ delay: Math.max(0, delay), weight: 1 / Math.max(1, uncertainty / 30), manual });
   }
   const recent = intervals.slice(-10).sort((a, b) => a.delay - b.delay);
   const weight = recent.reduce((sum, item) => sum + item.weight, 0);
@@ -82,7 +82,8 @@ export function estimate(boss) {
 export function bossTiming(boss, now = Date.now()) {
   const learned = estimate(boss);
   const observedAt = Date.parse(learned.latest.spawnAt);
-  const index = now < observedAt ? 0 : Math.floor((now - observedAt) / learned.interval) + 1;
+  let index = now < observedAt ? 0 : Math.floor((now - observedAt) / learned.interval) + 1;
+  if (observedAt + index * learned.interval <= now) index++;
   return { ...learned, at: observedAt + index * learned.interval, kind: index ? 'predicted' : 'observed', index };
 }
 
@@ -98,7 +99,8 @@ export function koreanTime(time, withDate = false, withSeconds = false) {
 // 기기 현재 시각과의 차이를 분 단위로 표시합니다.
 export function remaining(at, now = Date.now()) {
   if (at === null) return '새 관측 대기';
-  const minutes = Math.max(0, Math.ceil((at - now) / 60000));
+  if (at > now && at - now < 60000) return '1분 미만';
+  const minutes = Math.max(0, Math.floor((at - now) / 60000));
   return minutes >= 60 ? `${Math.floor(minutes / 60)}시간 ${minutes % 60}분` : `${minutes}분`;
 }
 
