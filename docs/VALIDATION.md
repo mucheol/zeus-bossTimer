@@ -50,3 +50,14 @@
 - 첫 실서비스 검사에서 리다이렉트 요청 옵션 오류가 발생하여 자동 리다이렉트를 차단하는 manual 방식으로 수정했습니다. 수정 후 재배포와 실제 수신 검사를 통과했습니다.
 - 테스트 구독과 예약은 확인 후 연결 해제로 제거했습니다.
 - 무료 플랜의 실서비스 CPU·대규모 수신량은 아직 측정하지 않았습니다.
+
+## Android 에뮬레이터 APK
+
+- 사용자 후속 요청으로 `android/`에 TWA 테스트 APK 프로젝트를 추가했습니다. 웹 화면은 기존 공개 주소를 그대로 불러옵니다.
+- Gradle 9.5.1 / Android Gradle Plugin 9.1.1 / Android Browser Helper 2.7.4 안정 버전으로 `assembleDebug` 성공. APK 서명 검증 통과.
+- 프로젝트 전용 테스트 키는 `.signing/`에 비공개 보관하며 공개 인증서 지문만 웹 `/.well-known/assetlinks.json`에 게시했습니다.
+- Medium_Phone (Android API 37.2, PreviewSdkInt=0) 에뮬레이터에 설치 완료. Chrome 초기 설정은 로그인 없이 완료했습니다.
+- APK 실행으로 주소창 없는 화면, 12:25 최신 관측 기준, 일반 보스 9마리 2열 목록과 침공 00·12·18시 버튼을 확인했습니다.
+- 로컬 APK: `dist/zeus-boss-timer-preview.apk`. 실제 실행 화면: `test-results/android-apk.png`. 두 파일은 Git에서 제외합니다.
+- Android Studio 본체는 기존 사용자 설정의 `.port` 접근 오류로 실행되지 않아, SDK 에뮬레이터 창에서 직접 실행했습니다. 기존 IDE 설정은 변경하지 않았습니다.
+- 이번 APK의 푸시 수신과 Android/iPhone 실기기 알림은 검증하지 않았습니다. APK는 테스트 서명이며 네이티브 알림 위임 서비스는 포함하지 않습니다.

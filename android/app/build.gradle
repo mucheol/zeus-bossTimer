@@ -1,0 +1,33 @@
+plugins {
+  id 'com.android.application'
+}
+
+android {
+  namespace 'com.mucheol.zeus.preview'
+  compileSdk {
+    version = release(37) {
+      minorApiLevel = 0
+    }
+  }
+
+  defaultConfig {
+    applicationId 'com.mucheol.zeus.preview'
+    minSdk 24
+    targetSdk 36
+    versionCode 1
+    versionName '1.0-preview'
+  }
+
+  signingConfigs {
+    debug {
+      storeFile rootProject.file('.signing/preview.keystore')
+      storePassword 'android'
+      keyAlias 'zeus-preview'
+      keyPassword 'android'
+    }
+  }
+}
+
+dependencies {
+  implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.7.4'
+}

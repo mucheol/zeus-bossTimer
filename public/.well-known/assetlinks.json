@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.mucheol.zeus.preview",
+      "sha256_cert_fingerprints": [
+        "B2:A4:26:20:1D:7D:A5:DE:44:7E:F3:62:D5:49:9A:A5:D6:66:1A:2B:E7:BB:BA:2E:A9:4C:22:62:FE:AA:57:95"
+      ]
+    }
+  }
+]

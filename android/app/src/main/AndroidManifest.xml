@@ -1,0 +1,36 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.INTERNET" />
+  <application
+    android:allowBackup="false"
+    android:icon="@drawable/app_icon"
+    android:label="제우스 (테스트)"
+    android:manageSpaceActivity="com.google.androidbrowserhelper.trusted.ManageDataLauncherActivity"
+    android:supportsRtl="true"
+    android:theme="@android:style/Theme.Translucent.NoTitleBar">
+    <meta-data android:name="asset_statements" android:resource="@string/asset_statements" />
+    <activity
+      android:name="com.google.androidbrowserhelper.trusted.ManageDataLauncherActivity"
+      android:exported="false">
+      <meta-data
+        android:name="android.support.customtabs.trusted.MANAGE_SPACE_URL"
+        android:value="https://zeus-boss-timer.zeus-boss-timer.workers.dev/" />
+    </activity>
+    <activity
+      android:name="com.google.androidbrowserhelper.trusted.LauncherActivity"
+      android:exported="true">
+      <meta-data
+        android:name="android.support.customtabs.trusted.DEFAULT_URL"
+        android:value="https://zeus-boss-timer.zeus-boss-timer.workers.dev/" />
+      <intent-filter>
+        <action android:name="android.intent.action.MAIN" />
+        <category android:name="android.intent.category.LAUNCHER" />
+      </intent-filter>
+      <intent-filter android:autoVerify="true">
+        <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <data android:scheme="https" android:host="zeus-boss-timer.zeus-boss-timer.workers.dev" />
+      </intent-filter>
+    </activity>
+  </application>
+</manifest>

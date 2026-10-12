@@ -2,6 +2,8 @@
 
 Android·iPhone 공통 PWA입니다. 웹 수정 후 배포하면 APK 재설치 없이 반영됩니다. 공통 보스 시간은 운영자가 게시하고, 이용자는 알림과 순서만 선택합니다.
 
+Android Studio 에뮬레이터에서 설치형으로 확인할 때는 [테스트 APK 프로젝트](android/README.md)를 사용합니다. 같은 웹을 여는 TWA이며 기존 PWA도 그대로 지원합니다.
+
 **사용 주소: https://zeus-boss-timer.zeus-boss-timer.workers.dev**
 
 ## 사용
