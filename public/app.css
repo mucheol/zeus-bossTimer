@@ -8,6 +8,7 @@ button:focus-visible,a:focus-visible{outline:2px solid var(--mint);outline-offse
 a{color:inherit;text-decoration:none}
 .app{max-width:800px;margin:auto;padding:14px 18px calc(20px + env(safe-area-inset-bottom))}
 .header{display:flex;align-items:center;justify-content:space-between;padding:4px 0 15px;border-bottom:1px solid var(--line)}
+.header-actions{display:flex;align-items:center;gap:8px}#admin-open[aria-pressed=true]{color:var(--gold);font-weight:700}.admin-hint{font-size:10px;color:var(--gold);margin:0 0 8px}.admin-mode .boss-card{cursor:pointer}.admin-mode .boss-card:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 .brand{display:flex;gap:11px;align-items:center;font-size:22px;letter-spacing:3px;font-weight:750;line-height:1.1}
 .brand-mark{color:var(--gold);font-size:42px;font-family:Georgia,serif;font-weight:normal;line-height:1}
 .brand-sub{display:block;font-size:8px;letter-spacing:2.6px;color:var(--muted);margin-top:6px}
@@ -40,11 +41,12 @@ h2{font-size:14px;margin:0;font-weight:650;letter-spacing:-.3px}.section-icon{co
 .boss-time{display:flex;align-items:center;gap:7px;margin-top:5px;min-width:0}
 .portrait{flex-shrink:0;width:27px;height:31px;border-radius:6px;background-image:url('/images/bosses.png');background-size:1145.455% 490.909%;background-repeat:no-repeat;border:1px solid #4b5040}
 .countdown{margin:0;color:var(--text);font-size:clamp(19px,5.8vw,25px);font-weight:750;letter-spacing:-1px;line-height:1.3;font-variant-numeric:tabular-nums;white-space:nowrap}
+.time-unit{font-size:.58em;font-weight:550;letter-spacing:0}
 .boss-card.soon .countdown{color:var(--gold)}
-.boss-card.stale .countdown{font-size:18px;color:var(--muted)}
+
 .spawn-time{color:#afbbb1;font-size:9px;white-space:nowrap;font-variant-numeric:tabular-nums}
 .card-bottom{display:flex;justify-content:space-between;align-items:center;margin-top:6px;gap:4px}
-.kind{font-size:9px;color:var(--mint);white-space:nowrap;letter-spacing:-.3px}.predicted .kind{color:var(--gold)}.stale .kind{color:var(--muted)}
+.kind{font-size:9px;color:var(--mint);white-space:nowrap;letter-spacing:-.3px}.predicted .kind{color:var(--gold)}
 .boss-alert{position:absolute;top:4px;right:4px;width:44px;height:44px;font-size:9px;color:var(--muted);display:flex;flex-direction:column;gap:1px;align-items:center;justify-content:center;border:1px solid transparent;border-radius:8px;padding:3px}
 .boss-alert svg{height:16px;width:16px;stroke:currentColor;stroke-width:1.7;fill:none;stroke-linecap:round;stroke-linejoin:round}
 .boss-alert[aria-pressed=true]{background:var(--mint);color:#14261c;border-color:#c6f1d9;font-weight:750}
@@ -58,6 +60,7 @@ footer{display:flex;justify-content:space-between;color:#89988c;font-size:8px;le
 dialog{max-width:460px;width:calc(100% - 28px);max-height:90dvh;border:1px solid #445046;border-radius:20px;background:var(--panel);color:var(--text);padding:22px;box-shadow:0 20px 80px #0008;overscroll-behavior:contain}
 dialog::backdrop{background:#060a08b8;backdrop-filter:blur(4px)}
 .dialog-heading{display:flex;justify-content:space-between;align-items:center}.dialog-heading h2{font-size:19px}.dialog-heading .icon-button{border:0}
+.input-label,.time-inputs label{display:block;font-size:12px;color:var(--muted);margin-top:12px}input{font:inherit;color:var(--text);background:var(--bg);border:1px solid #536458;border-radius:8px;padding:10px;min-height:44px;width:100%;margin:6px 0 16px}input:focus-visible{outline:2px solid var(--mint);outline-offset:2px}.time-inputs{display:flex;gap:12px}.time-inputs label{flex:1}.time-inputs input{font-size:22px;font-variant-numeric:tabular-nums}#boss-edit-save{width:100%}
 .push-status{color:var(--mint);font-size:12px;padding:14px 0 4px}.settings-copy{color:var(--muted);font-size:12px;line-height:1.7;margin:8px 0 16px}
 .push-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px}.primary,.secondary{min-height:44px;padding:10px 16px;border-radius:10px;font-size:12px}.primary{background:var(--mint);color:#15221b;font-weight:650}.secondary{border:1px solid #536458;background:#263129}
 .small-note{font-size:10px;line-height:1.8;color:var(--muted);margin:10px 0}hr{border:0;border-top:1px solid var(--line);margin:24px 0}dialog h3{font-size:13px;font-weight:600;margin:0}
@@ -67,6 +70,6 @@ dialog::backdrop{background:#060a08b8;backdrop-filter:blur(4px)}
 .update-banner{position:fixed;bottom:0;left:0;right:0;background:var(--gold);color:#20251e;padding:15px;text-align:center;z-index:11;font-size:12px}.update-banner button{margin-left:15px;text-decoration:underline;font-weight:700}
 .loading{color:var(--muted);grid-column:1/-1;padding:20px 0}
 [hidden]{display:none!important}
-@media(min-width:600px){.app{padding-top:30px}.intro{padding-top:36px}h1{font-size:42px}.boss-grid{gap:10px}.boss-card{padding:12px}.boss-top{min-height:39px}.portrait{width:34px;height:38px}.boss-identity h3{font-size:16px}.boss-meta{font-size:11px}.countdown{font-size:32px}.boss-card.stale .countdown{font-size:25px}.spawn-time,.kind{font-size:11px}.boss-alert{top:7px;right:7px}.invasion{padding:20px}.invasion-buttons button{min-height:72px}.observation-line{font-size:12px}.notice{font-size:12px}}
-@media(max-width:360px){.app{padding-left:14px;padding-right:14px}.boss-identity h3{font-size:12px}.portrait{width:24px;height:29px}.boss-time{gap:6px}.kind{font-size:8px}.boss-card.stale .countdown{font-size:16px}.tiny-label{font-size:9px}}
+@media(min-width:600px){.app{padding-top:30px}.intro{padding-top:36px}h1{font-size:42px}.boss-grid{gap:10px}.boss-card{padding:12px}.boss-top{min-height:39px}.portrait{width:34px;height:38px}.boss-identity h3{font-size:16px}.boss-meta{font-size:11px}.countdown{font-size:32px}.spawn-time,.kind{font-size:11px}.boss-alert{top:7px;right:7px}.invasion{padding:20px}.invasion-buttons button{min-height:72px}.observation-line{font-size:12px}.notice{font-size:12px}}
+@media(max-width:360px){.app{padding-left:14px;padding-right:14px}.boss-identity h3{font-size:12px}.portrait{width:24px;height:29px}.boss-time{gap:6px}.kind{font-size:8px}.tiny-label{font-size:9px}}
 @media(prefers-reduced-motion:no-preference){button{transition:background .15s,border-color .15s}}

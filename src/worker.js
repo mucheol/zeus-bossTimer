@@ -1,56 +1,36 @@
-import catalog from '../public/data/catalog.json' with { type: 'json' };
 import { buildPushPayload } from '@block65/webcrypto-web-push';
 import { plannedEvents, DAY } from '../public/lib/engine.js';
-import { deviceId, validatePreferences, validateSubscription, invalid } from './validation.js';
+import { deviceId, validatePreferences, validateSubscription, readBody } from './validation.js';
+import { loadCatalog } from './catalog.js';
+import { adminApi } from './admin.js';
+
+// 반복 예약 정책과 관측 자료 변경을 함께 감지합니다.
+function planRevision(catalog) {
+  return `${catalog.revision}:repeat-v1`;
+}
 
 // API 응답의 캐시와 외부 스크립트 접근을 제한합니다.
 function json(value, status = 200) {
   return Response.json(value, { status, headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
 }
 
-// 크기가 제한된 JSON 본문만 읽습니다.
-async function readBody(request) {
-  if (!request.headers.get('Content-Type')?.startsWith('application/json')) throw invalid('JSON 형식이 필요합니다.');
-  const reader = request.body?.getReader();
-  if (!reader) throw invalid('본문이 필요합니다.');
-  let size = 0;
-  const chunks = [];
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    size += value.length;
-    if (size > 16384) {
-      await reader.cancel();
-      throw Object.assign(new Error('요청이 너무 큽니다.'), { status: 413 });
-    }
-    chunks.push(value);
-  }
-  const bytes = new Uint8Array(size);
-  let position = 0;
-  for (const chunk of chunks) { bytes.set(chunk, position); position += chunk.length; }
-  try { return JSON.parse(new TextDecoder().decode(bytes)); } catch { throw invalid('JSON을 읽을 수 없습니다.'); }
-}
-
 // 취소된 미래 예약을 다시 만들되 이미 발송한 회차는 보존합니다.
-function jobStatements(env, id, preferences, now) {
+function jobStatements(env, id, preferences, now, catalog) {
   const events = plannedEvents(catalog, preferences, now);
-  const statements = [];
-  for (let i = 0; i < events.length; i += 15) {
-    const chunk = events.slice(i, i + 15);
-    const values = chunk.flatMap(event => [`${id}:${event.key}`, id, event.dueAt, event.expiresAt, JSON.stringify({
-      title: event.title, body: event.body, tag: event.key, expiresAt: event.expiresAt, url: '/'
-    })]);
-    statements.push(env.DB.prepare(`INSERT INTO jobs(id, device_id, due_at, expires_at, payload)
-      VALUES ${chunk.map(() => '(?, ?, ?, ?, ?)').join(',')}
-      ON CONFLICT(id) DO UPDATE SET due_at=excluded.due_at, expires_at=excluded.expires_at,
-        payload=excluded.payload, state='pending', lease_until=0
-      WHERE jobs.state IN ('pending', 'queued', 'cancelled')`).bind(...values));
-  }
-  return statements;
+  if (!events.length) return [];
+  const values = events.map(event => [`${id}:${event.key}`, id, event.dueAt, event.expiresAt, JSON.stringify({
+    title: event.title, body: event.body, tag: event.key, expiresAt: event.expiresAt, url: '/'
+  })]);
+  return [env.DB.prepare(`INSERT INTO jobs(id, device_id, due_at, expires_at, payload)
+    SELECT json_extract(value,'$[0]'),json_extract(value,'$[1]'),json_extract(value,'$[2]'),
+      json_extract(value,'$[3]'),json_extract(value,'$[4]') FROM json_each(?) WHERE true
+    ON CONFLICT(id) DO UPDATE SET due_at=excluded.due_at, expires_at=excluded.expires_at,
+      payload=excluded.payload, state='pending', lease_until=0
+    WHERE jobs.state IN ('pending', 'queued', 'cancelled')`).bind(JSON.stringify(values))];
 }
 
 // 기기 설정과 미래 예약을 하나의 트랜잭션으로 교체합니다.
-async function saveDevice(env, id, subscription, preferences, now) {
+async function saveDevice(env, id, subscription, preferences, now, catalog) {
   const existing = await env.DB.prepare('SELECT id FROM devices WHERE endpoint=?').bind(subscription.endpoint).first();
   if (existing && existing.id !== id) throw Object.assign(new Error('이 브라우저의 기존 알림 연결을 먼저 해제해 주세요.'), { status: 409 });
   await env.DB.batch([
@@ -58,15 +38,16 @@ async function saveDevice(env, id, subscription, preferences, now) {
       VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET
       endpoint=excluded.endpoint, subscription=excluded.subscription, preferences=excluded.preferences,
       revision=excluded.revision, planned_until=excluded.planned_until, updated_at=excluded.updated_at`
-    ).bind(id, subscription.endpoint, JSON.stringify(subscription), JSON.stringify(preferences), catalog.revision, now + DAY, now),
+    ).bind(id, subscription.endpoint, JSON.stringify(subscription), JSON.stringify(preferences), planRevision(catalog), now + DAY, now),
     env.DB.prepare("UPDATE jobs SET state='cancelled' WHERE device_id=? AND state IN ('pending', 'queued')").bind(id),
-    ...jobStatements(env, id, preferences, now)
+    ...jobStatements(env, id, preferences, now, catalog)
   ]);
 }
 
 // 앱의 구독 등록·해제와 잠금 화면용 테스트 알림을 처리합니다.
 async function api(request, env) {
   const url = new URL(request.url);
+  const catalog = await loadCatalog(env);
   const ready = Boolean(env.VAPID_PUBLIC_KEY && env.VAPID_PRIVATE_KEY && env.VAPID_SUBJECT);
   if (url.pathname === '/api/config' && request.method === 'GET') return json({ ready, publicKey: env.VAPID_PUBLIC_KEY || null, revision: catalog.revision });
   if (request.headers.get('Origin') !== url.origin) return json({ error: '같은 사이트에서만 요청할 수 있습니다.' }, 403);
@@ -87,7 +68,7 @@ async function api(request, env) {
     const body = await readBody(request);
     const preferences = validatePreferences(body.preferences, catalog);
     const subscription = await validateSubscription(body.subscription);
-    await saveDevice(env, id, subscription, preferences, Date.now());
+    await saveDevice(env, id, subscription, preferences, Date.now(), catalog);
     return json({ ok: true });
   }
   if (url.pathname === '/api/test' && request.method === 'POST') {
@@ -103,14 +84,16 @@ async function api(request, env) {
   return json({ error: '요청 경로를 찾을 수 없습니다.' }, 404);
 }
 
-// 자료 변경과 침공의 다음 날짜 예약을 기기별로 갱신합니다.
+// 자료·정책 변경과 다음 날짜의 반복 예약을 기기별로 갱신합니다.
 export async function schedule(env, now = Date.now()) {
-  const { results: devices } = await env.DB.prepare('SELECT id,preferences,revision FROM devices WHERE revision!=? OR planned_until<? LIMIT 5').bind(catalog.revision, now).all();
+  const catalog = await loadCatalog(env);
+  const revision = planRevision(catalog);
+  const { results: devices } = await env.DB.prepare('SELECT id,preferences,revision FROM devices WHERE revision!=? OR planned_until<? LIMIT 5').bind(revision, now).all();
   for (const device of devices) {
     await env.DB.batch([
-      env.DB.prepare("UPDATE jobs SET state='cancelled' WHERE device_id=? AND state IN ('pending','queued') AND (due_at>? OR ?!=?)").bind(device.id, now, catalog.revision, device.revision),
-      ...jobStatements(env, device.id, JSON.parse(device.preferences), now),
-      env.DB.prepare('UPDATE devices SET revision=?,planned_until=? WHERE id=?').bind(catalog.revision, now + DAY, device.id)
+      env.DB.prepare("UPDATE jobs SET state='cancelled' WHERE device_id=? AND state IN ('pending','queued') AND (due_at>? OR ?!=?)").bind(device.id, now, revision, device.revision),
+      ...jobStatements(env, device.id, JSON.parse(device.preferences), now, catalog),
+      env.DB.prepare('UPDATE devices SET revision=?,planned_until=? WHERE id=?').bind(revision, now + DAY, device.id)
     ]);
   }
   await env.DB.prepare("UPDATE jobs SET state='expired' WHERE expires_at<=? AND state IN ('pending','queued','sending')").bind(now).run();
@@ -129,7 +112,7 @@ export async function deliver(env, id, now = Date.now(), send = fetch) {
   if (!job) return;
   const device = await env.DB.prepare('SELECT subscription,revision FROM devices WHERE id=?').bind(job.device_id).first();
   if (!device) return;
-  if (!id.includes(':test:') && device.revision !== catalog.revision) {
+  if (!id.includes(':test:') && device.revision !== planRevision(await loadCatalog(env))) {
     await env.DB.prepare("UPDATE jobs SET state='cancelled' WHERE id=?").bind(id).run();
     return;
   }
@@ -165,8 +148,10 @@ export async function deliver(env, id, now = Date.now(), send = fetch) {
 export default {
   // 정적 앱과 동일 출처 API를 제공합니다.
   async fetch(request, env) {
-    if (!new URL(request.url).pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
-    try { return await api(request, env); } catch (error) {
+    const path = new URL(request.url).pathname;
+    if (path.startsWith('/api/admin/')) return adminApi(request, env);
+    if (path !== '/data/catalog.json' && !path.startsWith('/api/')) return env.ASSETS.fetch(request);
+    try { return path === '/data/catalog.json' ? json(await loadCatalog(env)) : await api(request, env); } catch (error) {
       if (!error.status) console.error('api-failed');
       return json({ error: error.status ? error.message : '저장에 실패했습니다. 잠시 후 다시 시도해 주세요.' }, error.status || 500);
     }

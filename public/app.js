@@ -22,6 +22,8 @@ let order = Array.isArray(saved.order) ? saved.order : [];
 let sort = ['custom', 'level-asc', 'level-desc', 'time-asc', 'time-desc'].includes(saved.sort) ? saved.sort : (order.length ? 'custom' : 'level-desc');
 let drag;
 let pending = Boolean(saved.pending);
+let administrator = false;
+let editedBoss;
 
 // 손상되거나 사용이 차단된 기기 저장소를 안전하게 읽습니다.
 function readStorage() {
@@ -71,9 +73,9 @@ function renderBosses() {
     const x = (boss.portrait[0] - 110) / (2520 - 220) * 100;
     const y = (boss.portrait[1] - 110) / (1080 - 220) * 100;
     const enabled = preferences.bosses.includes(boss.id);
-    return `<article class="boss-card" data-boss="${escape(boss.id)}" data-alert-enabled="${enabled}">
+    return `<article class="boss-card" data-boss="${escape(boss.id)}" data-alert-enabled="${enabled}" ${administrator ? `tabindex="0" aria-label="${escape(boss.name)} 공통 시간 수정"` : ''}>
       <div class="boss-top"><div class="boss-identity"><h3>${escape(boss.name)}</h3><span class="boss-meta">Lv.${boss.level} · ${escape(boss.region)}</span></div><button class="boss-alert" data-alert="${escape(boss.id)}" aria-label="${escape(boss.name)} 알림" aria-pressed="${enabled}">${bell}<span>${enabled ? '켜짐' : '알림'}</span></button></div>
-      <div class="boss-time"><div class="portrait" role="img" aria-label="${escape(boss.name)} 초상화" style="background-position:${x}% ${y}%"></div><div class="countdown" role="timer" title="남은 시간 · 시:분:초"></div></div>
+      <div class="boss-time"><div class="portrait" role="img" aria-label="${escape(boss.name)} 초상화" style="background-position:${x}% ${y}%"></div><div class="countdown" role="timer" title="남은 시간 · 분 단위"></div></div>
       <div class="card-bottom"><span class="kind"></span><span class="spawn-time"></span></div>
       ${editing ? `<div class="move-buttons"><button data-move="${escape(boss.id)}" data-direction="-1" aria-label="${escape(boss.name)} 앞으로" ${index === 0 ? 'disabled' : ''}>←</button><button class="drag-handle" data-drag="${escape(boss.id)}" aria-label="${escape(boss.name)} 순서 이동" title="끌어서 이동 · 방향키로 한 칸 이동">⠿</button><button data-move="${escape(boss.id)}" data-direction="1" aria-label="${escape(boss.name)} 뒤로" ${index === bosses.length - 1 ? 'disabled' : ''}>→</button></div>` : ''}
     </article>`;
@@ -96,17 +98,17 @@ function tick() {
   for (const boss of catalog.bosses) {
     const card = document.querySelector(`[data-boss="${boss.id}"]`);
     const timing = bossTiming(boss, now);
-    for (const kind of ['observed', 'predicted', 'stale']) card.classList.toggle(kind, timing.kind === kind);
+    for (const kind of ['observed', 'predicted']) card.classList.toggle(kind, timing.kind === kind);
     card.classList.toggle('soon', timing.at !== null && timing.at - now < 600000);
     const countdown = card.querySelector('.countdown');
     const text = remaining(timing.at, now);
-    countdown.textContent = text;
-    const parts = text.split(':');
-    countdown.setAttribute('aria-label', timing.at === null ? text : `${Number(parts[0])}시간 ${Number(parts[1])}분 ${Number(parts[2])}초 남음`);
+    countdown.innerHTML = escape(text).replace(/(시간|분)/g, '<span class="time-unit">$1</span>');
+    countdown.setAttribute('aria-label', timing.at === null ? text : `${text} 남음`);
     card.querySelector('.spawn-time').textContent = timing.at ? `${koreanTime(timing.at)} 예정` : `관측 ${koreanTime(Date.parse(timing.latest.capturedAt))}`;
     const kind = card.querySelector('.kind');
-    kind.textContent = ({ observed: '관측 기준', predicted: timing.sampleCount < 2 ? '추정 · 자료 부족' : '다음 회차 추정', stale: '갱신 필요' })[timing.kind];
-    kind.title = timing.kind === 'predicted' ? (timing.sampleCount < 2 ? '기본 주기 · 보정자료 부족' : `연속 회차 ${timing.sampleCount}개 기준`) : '촬영 초 미상 · 시각 오차 있음';
+    const manual = timing.latest.source?.startsWith('admin-');
+    kind.textContent = timing.kind === 'observed' ? (manual ? '관리자 수정' : '관측 기준') : timing.sampleCount < 2 ? '추정 · 자료 부족' : timing.index > 1 ? '반복 추정' : '다음 회차 추정';
+    kind.title = timing.kind === 'predicted' ? `${timing.sampleCount < 2 ? '보정자료 부족' : `연속 회차 ${timing.sampleCount}개 기준`} · 기준 이후 ${timing.index}회차 추정` : manual ? '저장 시점부터 입력한 시간·분 적용' : '촬영 초 미상 · 시각 오차 있음';
   }
   for (const button of document.querySelectorAll('[data-hour]')) {
     const hour = Number(button.dataset.hour);
@@ -176,22 +178,26 @@ function toggle(key, value) {
   void syncPreferences();
 }
 
+// 공통 자료를 반영하고 관리자 수정·오프라인 상태를 표시합니다.
+function applyCatalog(next, offline = false) {
+  const changed = next.revision !== catalog?.revision;
+  catalog = next;
+  preferences = restorePreferences(!restored ? saved.preferences : preferences);
+  restored = true;
+  $('#network').textContent = offline ? '오프라인 자료' : '연결됨';
+  $('#source-time').textContent = `${koreanTime(Date.parse(catalog.capturedAt), true)} ${catalog.source === 'admin' ? '관리자 수정' : '관측 · 초 미상'}`;
+  if (changed) renderBosses();
+  else tick();
+  renderSettings();
+}
+
 // 최신 공통 자료를 읽고 오프라인 캐시 여부를 명확히 표시합니다.
 async function refresh() {
   $('#refresh').disabled = true;
   try {
-    const response = await fetch('/data/catalog.json', { cache: 'no-store' });
+    const response = await fetch('/data/catalog.json', { cache: 'no-store', signal: AbortSignal.timeout(15000) });
     if (!response.ok) throw new Error('관측 자료를 불러올 수 없습니다.');
-    const next = await response.json();
-    const changed = next.revision !== catalog?.revision;
-    catalog = next;
-    preferences = restorePreferences(!restored ? saved.preferences : preferences);
-    restored = true;
-    const offline = response.headers.get('X-Zeus-Offline') === '1';
-    $('#network').textContent = offline ? '오프라인 자료' : '연결됨';
-    $('#source-time').textContent = `${koreanTime(Date.parse(catalog.capturedAt), true)} 관측 · 초 미상`;
-    if (changed) renderBosses();
-    renderSettings();
+    applyCatalog(await response.json(), response.headers.get('X-Zeus-Offline') === '1');
   } catch (error) {
     $('#network').textContent = '연결 끊김';
     if (!catalog) {
@@ -286,6 +292,51 @@ async function initializePush() {
 // 설정 창을 열고 현재 기기의 설치 안내를 보여 줍니다.
 function openSettings() {
   if (!$('#settings').open) $('#settings').showModal();
+}
+
+// 관리자 상태를 화면에만 반영하며 권한 판단은 서버에 맡깁니다.
+function setAdministrator(value) {
+  administrator = value;
+  document.body.classList.toggle('admin-mode', value);
+  $('#admin-open').textContent = value ? '관리중' : '관리자';
+  $('#admin-open').setAttribute('aria-pressed', value);
+  $('#admin-hint').hidden = !value;
+  $('#admin-login').hidden = value;
+  $('#admin-authorized').hidden = !value;
+  renderBosses();
+}
+
+// 비밀번호와 수정 요청을 동일 출처의 관리자 API로 전송합니다.
+async function adminRequest(path, method = 'GET', body) {
+  const response = await fetch(`/api/admin/${path}`, {
+    method, cache: 'no-store', credentials: 'same-origin', signal: AbortSignal.timeout(15000),
+    headers: { 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {})
+  });
+  const result = await response.json();
+  if (!response.ok) {
+    if (response.status === 401 && path !== 'login') setAdministrator(false);
+    throw new Error(result.error || '관리자 요청에 실패했습니다.');
+  }
+  return result;
+}
+
+// 기존의 유효한 관리자 세션을 복원합니다.
+async function restoreAdmin() {
+  try { setAdministrator((await adminRequest('status')).authenticated); } catch { setAdministrator(false); }
+}
+
+// 선택한 보스의 공통 남은 시간·분 입력창을 엽니다.
+function openBossEditor(id) {
+  if (!administrator || editing) return;
+  const boss = catalog?.bosses.find(item => item.id === id);
+  if (!boss) return;
+  editedBoss = id;
+  const minutes = Math.max(0, Math.ceil((bossTiming(boss).at - Date.now()) / 60000));
+  $('#boss-edit-title').textContent = `${boss.name} · 공통 시간`;
+  $('#boss-hours').value = Math.floor(minutes / 60);
+  $('#boss-minutes').value = minutes % 60;
+  $('#boss-edit-status').textContent = '';
+  $('#boss-editor').showModal();
 }
 
 // 현재 화면의 순서를 사용자 정렬로 저장합니다.
@@ -386,6 +437,39 @@ function endDrag(event) {
 }
 
 $('#settings-open').addEventListener('click', openSettings);
+$('#admin-open').addEventListener('click', async () => {
+  await restoreAdmin();
+  $('#admin-status').textContent = '';
+  if (!$('#admin-panel').open) $('#admin-panel').showModal();
+});
+$('#admin-close').addEventListener('click', () => $('#admin-panel').close());
+$('#boss-edit-close').addEventListener('click', () => $('#boss-editor').close());
+$('#admin-login').addEventListener('submit', async event => {
+  event.preventDefault();
+  $('#admin-login-submit').disabled = true;
+  try {
+    await adminRequest('login', 'POST', { password: $('#admin-password').value });
+    setAdministrator(true);
+    $('#admin-panel').close();
+    toast('관리자 모드 · 보스를 눌러 공통 시간을 수정하세요.');
+  } catch (error) { $('#admin-status').textContent = error.message; } finally {
+    $('#admin-password').value = '';
+    $('#admin-login-submit').disabled = false;
+  }
+});
+$('#admin-logout').addEventListener('click', async () => {
+  try { await adminRequest('logout', 'POST'); setAdministrator(false); $('#admin-panel').close(); } catch (error) { $('#admin-status').textContent = error.message; }
+});
+$('#boss-edit-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  $('#boss-edit-save').disabled = true;
+  try {
+    const result = await adminRequest('time', 'PUT', { bossId: editedBoss, hours: Number($('#boss-hours').value), minutes: Number($('#boss-minutes').value) });
+    applyCatalog(result.catalog);
+    $('#boss-editor').close();
+    toast('공통 시간 저장됨 · 다른 앱에도 15초 이내 반영됩니다.');
+  } catch (error) { $('#boss-edit-status').textContent = error.message; } finally { $('#boss-edit-save').disabled = false; }
+});
 $('#connect-banner').addEventListener('click', openSettings);
 $('#settings-close').addEventListener('click', () => $('#settings').close());
 $('#refresh').addEventListener('click', refresh);
@@ -409,11 +493,13 @@ $('#boss-list').addEventListener('click', event => {
   const move = event.target.closest('[data-move]');
   if (alert) toggle('bosses', alert.dataset.alert);
   if (move) moveBoss(move.dataset.move, Number(move.dataset.direction));
+  if (!event.target.closest('button')) openBossEditor(event.target.closest('[data-boss]')?.dataset.boss);
 });
 $('#boss-list').addEventListener('pointerdown', startDrag);
 $('#boss-list').addEventListener('pointermove', moveDrag);
 for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) $('#boss-list').addEventListener(type, endDrag);
 $('#boss-list').addEventListener('keydown', event => {
+  if (administrator && !event.target.closest('button') && ['Enter', ' '].includes(event.key)) { event.preventDefault(); openBossEditor(event.target.closest('[data-boss]')?.dataset.boss); return; }
   const handle = event.target.closest('[data-drag]');
   if (!handle || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
   event.preventDefault();
@@ -446,7 +532,8 @@ window.addEventListener('focus', tick);
 window.addEventListener('pageshow', tick);
 window.addEventListener('online', () => { void refresh(); void syncPreferences(); });
 window.addEventListener('offline', () => { $('#network').textContent = '오프라인 자료'; });
-await refresh();
-void initializePush();
+// 자료 요청과 별개로 기기 시각에 맞춰 화면을 계속 갱신합니다.
 setInterval(tick, 1000);
-setInterval(() => { if (!document.hidden) { void refresh(); void syncPreferences(); } }, 60000);
+setInterval(() => { if (!document.hidden) { void refresh(); void syncPreferences(); } }, 15000);
+void refresh().then(initializePush);
+void restoreAdmin();

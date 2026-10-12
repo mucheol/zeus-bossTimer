@@ -18,7 +18,7 @@
   <div class="app">
     <header class="header">
       <a class="brand" href="/" aria-label="제우스 타이머 홈"><span class="brand-mark">ϟ</span><span>ZEUS<span class="brand-sub">BOSS TIMER</span></span></a>
-      <button id="settings-open" class="icon-button" aria-label="알림 및 설치 설정"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M8 4v6m8 4v6"/></svg></button>
+      <div class="header-actions"><button id="admin-open" class="text-button" aria-pressed="false">관리자</button><button id="settings-open" class="icon-button" aria-label="알림 및 설치 설정"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M8 4v6m8 4v6"/></svg></button></div>
     </header>
     <main>
       <section class="intro">
@@ -37,9 +37,10 @@
       <section class="boss-section" aria-labelledby="boss-title">
         <div class="section-line boss-heading"><h2 id="boss-title">필드 보스 <span id="boss-count">09</span></h2><div class="sort-controls"><select id="boss-sort" aria-label="보스 정렬"><option value="level-desc">레벨 높은순 ↓</option><option value="level-asc">레벨 낮은순 ↑</option><option value="time-asc">출현 빠른순 ↑</option><option value="time-desc">출현 늦은순 ↓</option><option value="custom">내 순서</option></select><button id="reorder" class="text-button" aria-pressed="false">순서 편집</button></div></div>
         <div id="order-actions" class="order-actions" hidden><span>⠿ 손잡이를 끌어 이동 · 화살표로도 변경</span><button id="reset-order" class="text-button">레벨순 초기화</button></div>
+        <p id="admin-hint" class="admin-hint" hidden>관리자 모드 · 보스를 누르면 전체 이용자의 시간을 수정합니다.</p>
         <div id="boss-list" class="boss-grid" aria-label="보스 목록"><p class="loading">시간표를 불러오고 있습니다.</p></div>
       </section>
-      <aside class="notice"><span>ⓘ</span><p>관측 시각의 초는 미상입니다. 처치 시간에 따라 다음 회차가 달라질 수 있어요. <strong>추정은 다음 한 회차까지만</strong> 안내합니다.</p></aside>
+      <aside class="notice"><span>ⓘ</span><p>예정 시각이 지나면 처치된 것으로 가정해 <strong>다음 리스폰을 반복 추정</strong>합니다. 실제 처치 시각에 따라 달라지며 새 관측으로 보정합니다.</p></aside>
       <button id="connect-banner" class="connect-banner"><span class="connect-icon">♧</span><span><strong>화면을 닫아도 보스 알림</strong><small>홈 화면에 추가하고 알림을 연결하세요.</small></span><span aria-hidden="true">↗</span></button>
     </main>
     <footer><span>ZEUS BOSS TIMER</span><span>모든 시간은 한국시간 · KST</span></footer>
@@ -59,6 +60,18 @@
     <div id="install-guide" class="install-guide"><p><strong>iPhone</strong> Safari의 공유 → 홈 화면에 추가 → 추가한 앱에서 알림 연결. iOS 16.4 이상이 필요합니다.</p><p><strong>Android</strong> Chrome 메뉴 → 홈 화면에 추가 또는 앱 설치.</p></div>
     <button id="install" class="secondary" hidden>앱 설치</button>
     <p class="small-note">인터넷 연결과 알림 허용이 필요합니다. 집중 모드·절전·네트워크 상황에 따라 도착이 늦어질 수 있습니다. 침공 정각과 일반 보스 알림은 분 단위로 발송을 확인합니다.</p>
+  </dialog>
+  <dialog id="admin-panel">
+    <div class="dialog-heading"><h2>관리자</h2><button id="admin-close" class="icon-button" aria-label="관리자 창 닫기">×</button></div>
+    <form id="admin-login"><label class="input-label" for="admin-password">비밀번호</label><input id="admin-password" type="password" required maxlength="256" autocomplete="current-password"><button id="admin-login-submit" class="primary" type="submit">관리자 인증</button></form>
+    <div id="admin-authorized" hidden><p class="settings-copy">관리자 모드입니다. 목록의 보스를 눌러 공통 시간을 수정하세요.</p><button id="admin-logout" class="secondary">관리자 종료</button></div>
+    <p id="admin-status" class="small-note" role="status"></p>
+  </dialog>
+  <dialog id="boss-editor">
+    <div class="dialog-heading"><h2 id="boss-edit-title">공통 시간 수정</h2><button id="boss-edit-close" class="icon-button" aria-label="시간 수정 닫기">×</button></div>
+    <p class="settings-copy">저장한 시점부터 입력한 시간·분을 적용합니다. 기존의 남은 초는 이어 붙이지 않습니다. 모든 이용자에게 동일하게 반영됩니다.</p>
+    <form id="boss-edit-form"><div class="time-inputs"><label>시간<input id="boss-hours" type="number" min="0" max="48" step="1" inputmode="numeric" required></label><label>분<input id="boss-minutes" type="number" min="0" max="59" step="1" inputmode="numeric" required></label></div><p class="small-note">0시간 0분은 다음 리스폰 카운트다운을 시작합니다.</p><button id="boss-edit-save" class="primary" type="submit">저장하기</button></form>
+    <p id="boss-edit-status" class="small-note" role="status"></p>
   </dialog>
   <div id="toast" role="status" aria-live="polite" hidden></div>
   <div id="update-banner" class="update-banner" hidden>새 화면이 준비됐어요.<button id="apply-update">업데이트</button></div>

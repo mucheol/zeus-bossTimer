@@ -11,7 +11,7 @@ export function defaultPreferences() {
 // 회차 보정은 마지막 관측으로 합치고 연속 회차만 학습합니다.
 export function estimate(boss) {
   const cycles = new Map();
-  for (const observation of boss.observations) {
+  for (const observation of boss.observations.filter(item => !item.source?.startsWith('admin-'))) {
     cycles.set(observation.cycleId, observation);
   }
   const samples = [...cycles.values()].sort((a, b) => Date.parse(a.spawnAt) - Date.parse(b.spawnAt));
@@ -26,17 +26,15 @@ export function estimate(boss) {
   const recent = intervals.slice(-10).sort((a, b) => a - b);
   const mid = Math.floor(recent.length / 2);
   const interval = recent.length ? (recent[mid] + recent[Math.ceil(recent.length / 2) - 1]) / 2 : base;
-  return { latest: samples.at(-1), interval, sampleCount: recent.length };
+  return { latest: boss.observations.at(-1), interval, sampleCount: recent.length };
 }
 
-// 관측 회차와 다음 한 회차까지만 표시하고 오래된 자료는 만료시킵니다.
+// 예정 시각이 지나면 처치된 것으로 가정하고 현재 이후 회차를 계산합니다.
 export function bossTiming(boss, now = Date.now()) {
   const learned = estimate(boss);
   const observedAt = Date.parse(learned.latest.spawnAt);
-  if (now <= observedAt) return { ...learned, at: observedAt, kind: 'observed', index: 0 };
-  const predictedAt = observedAt + learned.interval;
-  if (now <= predictedAt) return { ...learned, at: predictedAt, kind: 'predicted', index: 1 };
-  return { ...learned, at: null, kind: 'stale', index: null };
+  const index = now < observedAt ? 0 : Math.floor((now - observedAt) / learned.interval) + 1;
+  return { ...learned, at: observedAt + index * learned.interval, kind: index ? 'predicted' : 'observed', index };
 }
 
 // 기기 시간대와 무관하게 한국시간 날짜와 시각을 표시합니다.
@@ -47,12 +45,11 @@ export function koreanTime(time, withDate = false) {
   }).format(time);
 }
 
-// 기기 현재 시각과의 차이를 시:분:초로 표시합니다.
+// 기기 현재 시각과의 차이를 분 단위로 표시합니다.
 export function remaining(at, now = Date.now()) {
   if (at === null) return '새 관측 대기';
-  const seconds = Math.max(0, Math.ceil((at - now) / 1000));
-  return [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60]
-    .map(value => String(value).padStart(2, '0')).join(':');
+  const minutes = Math.max(0, Math.ceil((at - now) / 60000));
+  return minutes >= 60 ? `${Math.floor(minutes / 60)}시간 ${minutes % 60}분` : `${minutes}분`;
 }
 
 // 한국시간 자정부터 지정 일수의 침공 정각 일정을 만듭니다.
@@ -64,19 +61,20 @@ export function invasionTimes(now, days = 3) {
   }))).flat();
 }
 
-// 미래 알림만 생성하며 침공에는 사전 알림을 적용하지 않습니다.
+// 반복 회차의 3일치 미래 알림을 만들며 침공은 정각만 예약합니다.
 export function plannedEvents(catalog, preferences, now) {
   const events = [];
   for (const boss of catalog.bosses) {
     if (!preferences.bosses.includes(boss.id)) continue;
     const { latest, interval, sampleCount } = estimate(boss);
     const observedAt = Date.parse(latest.spawnAt);
-    for (const index of [0, 1]) {
+    const first = Math.max(0, Math.floor((now - observedAt) / interval));
+    for (let index = first; observedAt + index * interval <= now + 3 * DAY; index++) {
       const at = observedAt + index * interval;
       for (const offset of preferences.offsets) {
         const dueAt = at - offset * 1000;
         if (dueAt <= now) continue;
-        const qualifier = index ? '다음 회차 추정' : '관측 기준 예정';
+        const qualifier = index ? `${index === 1 ? '다음 회차' : '반복'} 추정` : '관측 기준 예정';
         events.push({
           key: `${boss.id}:${latest.cycleId}:${index}:${offset}`,
           dueAt, expiresAt: Math.min(dueAt + 120000, offset ? at : dueAt + 120000),
@@ -106,8 +104,6 @@ export function orderedBosses(bosses, order = [], sort = 'custom', now = Date.no
     return ranked.sort((a, b) => {
       const left = times.get(a.id);
       const right = times.get(b.id);
-      if (left === null) return right === null ? 0 : 1;
-      if (right === null) return -1;
       return (left - right) * (sort === 'time-asc' ? 1 : -1);
     });
   }

@@ -22,13 +22,15 @@ npm run deploy
 node scripts/upload-secrets.js
 ```
 
-`.dev.vars`에는 VAPID 공개키·비밀키·연락 가능한 HTTPS 주소가 있습니다. 비밀키는 Cloudflare secret으로 전달하며 저장소나 명령 출력에 노출하지 않습니다. 최초 키를 보관하고, 이후 배포 때 새로 생성하지 않습니다. 키를 변경하면 기존 기기는 알림 연결을 다시 해야 합니다.
+`.dev.vars`에는 VAPID 공개키·비밀키·연락 가능한 HTTPS 주소가 있습니다. 관리자 비밀번호는 같은 파일에 `ADMIN_PASSWORD="직접 정한 값"`으로 추가합니다. 비밀값은 `upload-secrets.js`가 표준 입력으로 Cloudflare secret에 전달하며 저장소나 명령 출력에 노출하지 않습니다. 최초 키를 보관하고, 이후 배포 때 새로 생성하지 않습니다. 키를 변경하면 기존 기기는 알림 연결을 다시 해야 합니다.
 
 ## 수정 후 배포
 
 ```powershell
 npm run deploy
 ```
+
+스키마가 추가된 버전은 먼저 `npm run db:remote`를 실행합니다. 관리자 시간 수정은 배포 없이 D1에 즉시 저장되며 열린 다른 기기는 최대 15초 뒤 또는 복귀 시 확인합니다. 푸시 예약은 아래의 분 단위 갱신 규칙을 따릅니다.
 
 공통 자료를 수정할 때는 `public/data/catalog.json`의 `revision`도 변경합니다. 새 관측은 같은 회차인지 확인하고 원본 기록과 이미지도 보관합니다. 배포 전 데이터 검사·시간 계산·D1 검사와 번들 검사를 실행합니다. 화면 변경 시 캐시 버전이 자동 갱신됩니다.
 
@@ -55,4 +57,4 @@ npm run deploy
 
 iPhone은 iOS 16.4 이상과 홈 화면 설치가 필요합니다. [Apple 안내](https://developer.apple.com/documentation/usernotifications/sending-web-push-notifications-in-web-apps-and-browsers).
 
-Cron은 분 단위이므로 정각은 예약 기준이며 초 단위 도착은 보장하지 않습니다. 최신 관측에서 다음 한 회차까지만 일반 보스 추정을 예약합니다. 이후 자료가 없으면 일반 보스 알림은 종료하고 침공 일정은 계속 유지합니다.
+Cron은 분 단위이므로 정각은 예약 기준이며 초 단위 도착은 보장하지 않습니다. 일반 보스는 최신 기준 이후 리스폰을 반복 추정합니다. 미래 3일치 예약을 만들고 매일 갱신하며 지난 알림은 제외합니다. 관리자 수정값과 반복 추정은 실제 관측 학습에 포함하지 않습니다.

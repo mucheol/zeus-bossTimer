@@ -12,6 +12,19 @@ for (const boss of noonCatalog.bosses) {
   boss.observations = boss.observations.filter(observation => Date.parse(observation.capturedAt) <= Date.parse('2026-10-12T12:25:00+09:00'));
 }
 
+// 더 이른 시각으로 수정해도 관리자 입력을 우선하고 실제 회차 학습을 유지합니다.
+test('관리자 수정은 예정 시각 순서와 관계없이 적용되며 학습 표본에서 제외', () => {
+  const boss = structuredClone(catalog.bosses.find(item => item.id === 'alastor'));
+  const before = estimate(boss);
+  const now = Date.parse('2026-10-12T14:00:00+09:00');
+  boss.observations.push({ source: 'admin-1', cycleId: 'admin-1', capturedAt: new Date(now).toISOString(), spawnAt: new Date(now + 60000).toISOString() });
+  assert.equal(bossTiming(boss, now).at, now + 60000);
+  assert.equal(estimate(boss).sampleCount, before.sampleCount);
+  assert.equal(estimate(boss).interval, before.interval);
+  boss.observations.at(-1).spawnAt = new Date(now).toISOString();
+  assert.equal(bossTiming(boss, now).at, now + before.interval);
+});
+
 // 최신 표와 같은 회차 보정이 원본 시간 그대로 계산되는지 확인합니다.
 test('12:01 관측 9마리와 동일 회차 보정은 새 학습 표본이 아니다', () => {
   assert.equal(previousCatalog.bosses.length, 9);
@@ -78,28 +91,58 @@ test('13:52 관측 9마리 갱신, 알라스토르만 새 회차, 기존 연속 
   assert.equal(events.find(event => event.key.startsWith('bedix:') && event.key.endsWith(':0')).dueAt, Date.parse('2026-10-12T13:53:48+09:00'));
 });
 
-// 다음 한 회차까지만 추정하며 지난 추정을 다시 학습하지 않습니다.
-test('관측 이후 한 회차 추정, 그 이후에는 자료 대기', () => {
+// 지난 회차는 처치된 것으로 가정하되 추정을 실제 관측으로 학습하지 않습니다.
+test('예정 시각 이후 반복 리스폰, 여러 회차·날짜 건너뛰기와 원본 보존', () => {
   const boss = catalog.bosses[0];
-  assert.equal(bossTiming(boss, Date.parse('2026-10-12T14:00:00+09:00')).kind, 'predicted');
-  assert.equal(bossTiming(boss, Date.parse('2026-10-13T02:00:00+09:00')).kind, 'stale');
+  const original = structuredClone(boss.observations);
+  const at = Date.parse(estimate(boss).latest.spawnAt);
+  const interval = estimate(boss).interval;
+  assert.equal(bossTiming(boss, at - 1).kind, 'observed');
+  assert.equal(bossTiming(boss, at).at, at + interval);
+  assert.equal(bossTiming(boss, at + interval).at, at + 2 * interval);
+  const later = bossTiming(boss, at + 9 * interval + 60000);
+  assert.equal(later.kind, 'predicted');
+  assert.equal(later.index, 10);
+  assert.equal(later.at, at + 10 * interval);
   assert.equal(estimate(boss).sampleCount, 0);
+  assert.deepEqual(boss.observations, original);
 });
 
-// 기기 시각 차이를 초 단위로 표시하며 시간 변경과 경계값을 처리합니다.
-test('실시간 남은 시간, 시·분 경계, 기기 시각 변경과 만료', () => {
+// 화면과 같은 반복 회차를 예약하고 이미 지난 알림은 되살리지 않습니다.
+test('반복 회차 푸시 예약, 매일 갱신해도 회차 키 유지와 미래 알림만 생성', () => {
+  const boss = catalog.bosses.find(item => item.id === 'bedix');
+  const at = Date.parse(estimate(boss).latest.spawnAt);
+  const now = at + 3 * 8 * 3600000 + 60000;
+  const prefs = { bosses: [boss.id], offsets: [300, 0], invasion: [] };
+  const events = plannedEvents(catalog, prefs, now);
+  const timing = bossTiming(boss, now);
+  assert.ok(events.length > 2);
+  assert.equal(events[0].dueAt, timing.at - 300000);
+  assert.equal(events[1].dueAt, timing.at);
+  assert.ok(events[0].key.includes(':4:300'));
+  assert.ok(events[0].body.includes('반복 추정'));
+  assert.ok(events.every(event => event.dueAt > now && event.dueAt <= now + 3 * 86400000));
+  const renewed = plannedEvents(catalog, prefs, now + 86400000);
+  assert.deepEqual(renewed.filter(event => event.dueAt <= now + 3 * 86400000).map(event => event.key), events.filter(event => event.dueAt > now + 86400000).map(event => event.key));
+});
+
+// 분 표시를 유지하며 기기 시각 경과·변경과 예정 시각 경계를 처리합니다.
+test('분 단위 남은 시간, 시·분 경계, 기기 시각 변경과 만료', () => {
   const now = Date.parse('2026-10-12T13:52:00+09:00');
   const at = now + 3600000;
-  assert.equal(remaining(at, now), '01:00:00');
-  assert.equal(remaining(at, now + 1000), '00:59:59');
-  assert.equal(remaining(at, now + 3540000), '00:01:00');
-  assert.equal(remaining(at, now + 3541000), '00:00:59');
-  assert.equal(remaining(at, now + 3599999), '00:00:01');
-  assert.equal(remaining(at, at), '00:00:00');
-  assert.equal(remaining(at, at + 60000), '00:00:00');
-  assert.equal(remaining(at, now - 60000), '01:01:00');
-  assert.equal(remaining(now + 12 * 3600000, now), '12:00:00');
+  assert.equal(remaining(at, now), '1시간 0분');
+  assert.equal(remaining(at, now + 1000), '1시간 0분');
+  assert.equal(remaining(at, now + 60000), '59분');
+  assert.equal(remaining(at, now + 3540000), '1분');
+  assert.equal(remaining(at, now + 3541000), '1분');
+  assert.equal(remaining(at, now + 3599999), '1분');
+  assert.equal(remaining(at, at), '0분');
+  assert.equal(remaining(at, at + 60000), '0분');
+  assert.equal(remaining(at, now - 60000), '1시간 1분');
+  assert.equal(remaining(now + 12 * 3600000, now), '12시간 0분');
   assert.equal(remaining(null, now), '새 관측 대기');
+  const fourMinutes = now + 240000;
+  assert.deepEqual([0, 60000, 120000, 180000, 240000].map(elapsed => remaining(fourMinutes, now + elapsed)), ['4분', '3분', '2분', '1분', '0분']);
 });
 
 // 명시된 연속 회차만 중앙값에 사용하고 짧거나 누락된 간격은 제외합니다.
@@ -165,8 +208,8 @@ test('레벨 오름·내림차순과 동률 순서, 사용자 순서 보존', ()
   assert.deepEqual(order, ['c', 'b', 'a']);
 });
 
-// 날짜가 넘어가는 출현 예정과 자료 만료를 실제 시각으로 비교합니다.
-test('출현 시간 양방향 정렬, 날짜 넘김·동률·만료는 마지막', () => {
+// 날짜가 넘어가거나 여러 회차가 지나도 다음 출현 시각을 비교합니다.
+test('출현 시간 양방향 정렬, 날짜 넘김·동률·반복 회차 반영', () => {
   const bosses = [
     { id: 'late', level: 35, at: '2026-10-13T00:15:00+09:00' },
     { id: 'early', level: 45, at: '2026-10-12T23:55:00+09:00' },
@@ -174,11 +217,11 @@ test('출현 시간 양방향 정렬, 날짜 넘김·동률·만료는 마지막
     { id: 'stale', level: 65, at: '2026-10-12T08:00:00+09:00' }
   ].map(boss => ({ ...boss, respawnHours: 8, observations: [{ cycleId: 'c1', spawnAt: boss.at }] }));
   const now = Date.parse('2026-10-12T23:50:00+09:00');
-  assert.deepEqual(orderedBosses(bosses, [], 'time-asc', now).map(boss => boss.id), ['tie', 'early', 'late', 'stale']);
-  assert.deepEqual(orderedBosses(bosses, [], 'time-desc', now).map(boss => boss.id), ['late', 'tie', 'early', 'stale']);
+  assert.deepEqual(orderedBosses(bosses, [], 'time-asc', now).map(boss => boss.id), ['tie', 'early', 'stale', 'late']);
+  assert.deepEqual(orderedBosses(bosses, [], 'time-desc', now).map(boss => boss.id), ['late', 'stale', 'tie', 'early']);
   const next = Date.parse('2026-10-12T23:56:00+09:00');
-  assert.deepEqual(orderedBosses(bosses, [], 'time-asc', next).map(boss => boss.id), ['late', 'tie', 'early', 'stale']);
+  assert.deepEqual(orderedBosses(bosses, [], 'time-asc', next).map(boss => boss.id), ['stale', 'late', 'tie', 'early']);
   assert.equal(bossTiming(bosses[1], next).kind, 'predicted');
   const expired = Date.parse('2026-10-13T09:00:00+09:00');
-  assert.deepEqual(orderedBosses(bosses, [], 'time-desc', expired).map(boss => boss.id), ['stale', 'tie', 'early', 'late']);
+  assert.deepEqual(orderedBosses(bosses, [], 'time-desc', expired).map(boss => boss.id), ['late', 'stale', 'tie', 'early']);
 });

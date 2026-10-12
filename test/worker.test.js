@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { getPlatformProxy } from 'wrangler';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import worker, { schedule, deliver } from '../src/worker.js';
 import { validateSubscription } from '../src/validation.js';
 import catalog from '../public/data/catalog.json' with { type: 'json' };
@@ -12,7 +12,7 @@ async function environment(context) {
   const platform = await getPlatformProxy({ persist: false, remoteBindings: false });
   context.after(() => platform.dispose());
   const DB = platform.env.DB;
-  const statements = readFileSync('migrations/0001_push.sql', 'utf8').split(';').filter(sql => sql.trim());
+  const statements = readdirSync('migrations').filter(name => name.endsWith('.sql')).sort().flatMap(name => readFileSync(`migrations/${name}`, 'utf8').split(';').filter(sql => sql.trim()));
   await DB.batch(statements.map(sql => DB.prepare(sql)));
   const receiver = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
   const vapid = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
@@ -23,6 +23,7 @@ async function environment(context) {
   return {
     DB, VAPID_PUBLIC_KEY: Buffer.from(vapidRaw).toString('base64url'), VAPID_PRIVATE_KEY: jwk.d,
     VAPID_SUBJECT: 'https://example.com', API_RATE_LIMIT: { limit: async () => ({ success: true }) },
+    ADMIN_PASSWORD: 'test-only-admin', ADMIN_LOGIN_LIMIT: { limit: async () => ({ success: true }) },
     PUSH_QUEUE: { send: async body => messages.push(body), sendBatch: async jobs => messages.push(...jobs.map(job => job.body)) },
     messages, subscription: { endpoint: 'https://fcm.googleapis.com/fcm/send/test', keys: { p256dh: Buffer.from(receiverRaw).toString('base64url'), auth: Buffer.alloc(16, 7).toString('base64url') } }
   };
@@ -45,6 +46,29 @@ test('구독 저장·침공 취소·해제, 다른 토큰의 기존 주소 탈�
   assert.equal((await env.DB.prepare("SELECT COUNT(*) AS count FROM jobs WHERE state='pending'").first()).count, 0);
   assert.equal((await worker.fetch(request('/api/subscription', 'DELETE'), env)).status, 200);
   assert.equal((await env.DB.prepare('SELECT COUNT(*) AS count FROM jobs').first()).count, 0);
+});
+
+// 최대 선택 기기 5대의 반복 예약도 무료 실행당 쿼리 한도 안에서 갱신합니다.
+test('전체 보스·모든 시점의 5기기 반복 예약은 50쿼리 이내', async context => {
+  const env = await environment(context);
+  const preferences = { bosses: catalog.bosses.map(boss => boss.id), offsets: [600, 300, 60, 0], invasion: [0, 12, 18] };
+  for (let index = 1; index <= 5; index++) {
+    const subscription = { ...env.subscription, endpoint: `${env.subscription.endpoint}-${index}` };
+    assert.equal((await worker.fetch(request('/api/subscription', 'PUT', { subscription, preferences }, String(index).repeat(64)), env)).status, 200);
+  }
+  await env.DB.prepare("UPDATE devices SET revision='old'").run();
+  const database = env.DB;
+  let queries = 0;
+  env.DB = {
+    // 실제로 실행할 준비된 문장을 집계합니다.
+    prepare(sql) { queries++; return database.prepare(sql); },
+    // 실제 D1 트랜잭션을 그대로 실행합니다.
+    batch(statements) { return database.batch(statements); }
+  };
+  await schedule(env, Date.now());
+  assert.ok(queries <= 50, `쿼리 수 ${queries}`);
+  assert.equal((await database.prepare("SELECT COUNT(*) AS count FROM devices WHERE revision='old'").first()).count, 0);
+  assert.ok((await database.prepare("SELECT COUNT(*) AS count FROM jobs WHERE state='pending'").first()).count > 1000);
 });
 
 // 외부 사이트 요청·잘못된 보스·임의 주소·큰 본문을 거절합니다.
@@ -135,4 +159,71 @@ test('자료 보정 후 예약 갱신과 발송 이력 보존', async context =>
     observation.spawnAt = originalTime;
     catalog.revision = originalRevision;
   }
+});
+
+// 인증·공통 저장·다른 기기 조회와 수정 후 예약 교체를 실제 D1에서 검사합니다.
+test('관리자 인증 후 공통 시간 저장, 전체 기기 공유, 초 제거와 예약 교체', async context => {
+  const env = await environment(context);
+  const now = Date.parse('2026-10-12T14:10:37.500+09:00');
+  context.mock.method(Date, 'now', () => now);
+  const preferences = { bosses: ['bedix'], offsets: [0], invasion: [] };
+  await worker.fetch(request('/api/subscription', 'PUT', { subscription: env.subscription, preferences }), env);
+  const oldJob = await env.DB.prepare('SELECT * FROM jobs ORDER BY due_at LIMIT 1').first();
+  const login = await worker.fetch(request('/api/admin/login', 'POST', { password: env.ADMIN_PASSWORD }), env);
+  assert.equal(login.status, 200);
+  const cookieHeader = login.headers.get('Set-Cookie');
+  assert.match(cookieHeader, /HttpOnly; Secure; SameSite=Strict/);
+  const cookie = cookieHeader.split(';')[0];
+  const edit = request('/api/admin/time', 'PUT', { bossId: 'bedix', hours: 1, minutes: 12, seconds: 59 });
+  edit.headers.set('Cookie', cookie);
+  const saved = await worker.fetch(edit, env);
+  assert.equal(saved.status, 200);
+  const shared = (await saved.json()).catalog;
+  assert.equal(shared.source, 'admin');
+  assert.equal(shared.bosses.find(boss => boss.id === 'bedix').observations.at(-1).spawnAt, new Date(now + 72 * 60000).toISOString());
+  const update = await env.DB.prepare('SELECT * FROM boss_updates').first();
+  assert.equal(update.spawn_at - update.recorded_at, 72 * 60000);
+  assert.deepEqual(await (await worker.fetch(request('/data/catalog.json', 'GET'), env)).json(), shared);
+  assert.equal(catalog.bosses.find(boss => boss.id === 'bedix').observations.at(-1).source, 'screenshot-006');
+  await env.DB.prepare("UPDATE jobs SET state='queued' WHERE id=?").bind(oldJob.id).run();
+  await deliver(env, oldJob.id, now, async () => assert.fail('관리자 수정 전 예약 발송'));
+  assert.equal((await env.DB.prepare('SELECT state FROM jobs WHERE id=?').bind(oldJob.id).first()).state, 'cancelled');
+  await schedule(env, now);
+  const next = await env.DB.prepare("SELECT * FROM jobs WHERE state='pending' ORDER BY due_at LIMIT 1").first();
+  assert.equal(next.due_at, now + 72 * 60000);
+  const logout = request('/api/admin/logout', 'POST');
+  logout.headers.set('Cookie', cookie);
+  assert.equal((await worker.fetch(logout, env)).status, 200);
+  const denied = request('/api/admin/time', 'PUT', { bossId: 'bedix', hours: 0, minutes: 1 });
+  denied.headers.set('Cookie', cookie);
+  assert.equal((await worker.fetch(denied, env)).status, 401);
+});
+
+// 비인증·오인증·교차 출처·변조 입력·만료 세션을 차단합니다.
+test('관리자 권한과 입력 경계, 인증 제한·세션 만료·최신 관측 우선', async context => {
+  const env = await environment(context);
+  let now = Date.parse('2026-10-12T14:10:00+09:00');
+  context.mock.method(Date, 'now', () => now);
+  assert.equal((await worker.fetch(request('/api/admin/time', 'PUT', { bossId: 'bedix', hours: 0, minutes: 5 }), env)).status, 401);
+  assert.equal((await worker.fetch(request('/api/admin/login', 'POST', { password: 'wrong' }), env)).status, 401);
+  const crossOrigin = request('/api/admin/login', 'POST', { password: env.ADMIN_PASSWORD });
+  crossOrigin.headers.set('Origin', 'https://other.example');
+  assert.equal((await worker.fetch(crossOrigin, env)).status, 403);
+  const login = await worker.fetch(request('/api/admin/login', 'POST', { password: env.ADMIN_PASSWORD }), env);
+  const cookie = login.headers.get('Set-Cookie').split(';')[0];
+  for (const body of [{ bossId: 'unknown', hours: 0, minutes: 1 }, { bossId: 'bedix', hours: -1, minutes: 1 }, { bossId: 'bedix', hours: 0.5, minutes: 1 }, { bossId: 'bedix', hours: 0, minutes: 60 }, { bossId: 'bedix', hours: 48, minutes: 1 }]) {
+    const edit = request('/api/admin/time', 'PUT', body);
+    edit.headers.set('Cookie', cookie);
+    assert.equal((await worker.fetch(edit, env)).status, 400);
+  }
+  const status = request('/api/admin/status', 'GET');
+  status.headers.set('Cookie', cookie);
+  assert.equal((await (await worker.fetch(status, env)).json()).authenticated, true);
+  now += 8 * 3600000;
+  assert.equal((await (await worker.fetch(status, env)).json()).authenticated, false);
+  env.ADMIN_LOGIN_LIMIT.limit = async () => ({ success: false });
+  assert.equal((await worker.fetch(request('/api/admin/login', 'POST', { password: env.ADMIN_PASSWORD }), env)).status, 429);
+  await env.DB.prepare('INSERT INTO boss_updates(boss_id,recorded_at,spawn_at) VALUES (?,?,?)').bind('bedix', Date.parse('2026-10-12T12:00:00+09:00'), now).run();
+  const shared = await (await worker.fetch(request('/data/catalog.json', 'GET'), env)).json();
+  assert.equal(shared.bosses.find(boss => boss.id === 'bedix').observations.at(-1).source, 'screenshot-006');
 });
