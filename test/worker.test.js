@@ -5,6 +5,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import worker, { schedule, deliver } from '../src/worker.js';
 import { validateSubscription } from '../src/validation.js';
 import catalog from '../public/data/catalog.json' with { type: 'json' };
+import { estimate } from '../public/lib/engine.js';
 
 // 실제 암호화가 가능한 브라우저 구독키와 VAPID 키를 만듭니다.
 async function environment(context) {
@@ -159,6 +160,24 @@ test('자료 보정 후 예약 갱신과 발송 이력 보존', async context =>
     observation.spawnAt = originalTime;
     catalog.revision = originalRevision;
   }
+});
+
+// 최신 수정만 적용하던 기존 이력도 모두 읽어 학습하고 원본을 보존합니다.
+test('과거 관리자 이력 전체 보존·조회와 이미지 이후 보정 학습', async context => {
+  const env = await environment(context);
+  const boss = catalog.bosses.find(item => item.id === 'bedix');
+  const start = Date.parse(boss.observations.at(-1).spawnAt);
+  for (let cycle = 1; cycle <= 3; cycle++) {
+    const at = start + cycle * (8 * 3600000 + 45000);
+    await env.DB.prepare('INSERT INTO boss_updates(boss_id,recorded_at,spawn_at) VALUES (?,?,?)').bind(boss.id, at - 600000, at).run();
+  }
+  const shared = await (await worker.fetch(request('/data/catalog.json', 'GET'), env)).json();
+  const merged = shared.bosses.find(item => item.id === boss.id);
+  assert.equal(merged.observations.length, boss.observations.length + 3);
+  assert.deepEqual(merged.observations.slice(0, boss.observations.length), boss.observations);
+  assert.equal(estimate(merged).manualSampleCount, 3);
+  assert.ok(estimate(merged).killSeconds > 30 && estimate(merged).killSeconds < 45);
+  assert.equal((await env.DB.prepare('SELECT COUNT(*) AS count FROM boss_updates').first()).count, 3);
 });
 
 // 인증·공통 저장·다른 기기 조회와 수정 후 예약 교체를 실제 D1에서 검사합니다.

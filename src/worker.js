@@ -6,7 +6,7 @@ import { adminApi } from './admin.js';
 
 // 반복 예약 정책과 관측 자료 변경을 함께 감지합니다.
 function planRevision(catalog) {
-  return `${catalog.revision}:repeat-v1`;
+  return `${catalog.revision}:kill-calibration-v1`;
 }
 
 // API 응답의 캐시와 외부 스크립트 접근을 제한합니다.

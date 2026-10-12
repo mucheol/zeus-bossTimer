@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import catalog from '../public/data/catalog.json' with { type: 'json' };
-import { estimate, bossTiming, invasionTimes, plannedEvents, orderedBosses, defaultPreferences, remaining } from '../public/lib/engine.js';
+import { estimate, bossTiming, invasionTimes, plannedEvents, orderedBosses, defaultPreferences, remaining, defaultKillSeconds } from '../public/lib/engine.js';
 
 const previousCatalog = structuredClone(catalog);
 for (const boss of previousCatalog.bosses) {
@@ -12,8 +12,65 @@ for (const boss of noonCatalog.bosses) {
   boss.observations = boss.observations.filter(observation => Date.parse(observation.capturedAt) <= Date.parse('2026-10-12T12:25:00+09:00'));
 }
 
+// 보정자료가 없을 때는 지정한 지역 기본값을 매 회차 한 번만 더합니다.
+test('테살리아 15초·자하브 30초 기본 처치시간과 화면·푸시 일치', () => {
+  const start = Date.parse('2026-10-12T00:00:00+09:00');
+  for (const [region, seconds] of [['테살리아', 15], ['자하브', 30]]) {
+    const boss = { id: 'test', name: '테스트', region, respawnHours: 8, observations: [{ cycleId: 'c0', capturedAt: new Date(start - 60000).toISOString(), spawnAt: new Date(start).toISOString() }] };
+    const model = estimate(boss);
+    assert.equal(model.killSeconds, seconds);
+    assert.equal(model.interval, 8 * 3600000 + seconds * 1000);
+    assert.equal(bossTiming(boss, start).at, start + model.interval);
+    assert.equal(bossTiming(boss, start + model.interval).at, start + 2 * model.interval);
+    assert.equal(plannedEvents({ bosses: [boss] }, { bosses: ['test'], offsets: [0], invasion: [] }, start)[0].dueAt, bossTiming(boss, start).at);
+  }
+});
+
+// 관리자 보정과 이미지의 같은 회차는 하나로 세고 간격 자료만 누적합니다.
+test('이미지·관리자 이력 혼합, 동일 회차 중복 제외와 점진적 보정', () => {
+  const start = Date.parse('2026-10-01T00:00:00+09:00');
+  const period = 8 * 3600000 + 60000;
+  const boss = { region: '자하브', respawnHours: 8, observations: [] };
+  for (let cycle = 0; cycle < 8; cycle++) {
+    const at = start + cycle * period;
+    boss.observations.push({ source: cycle ? `admin-${cycle}` : 'screenshot', cycleId: `c${cycle}`, capturedAt: new Date(at - 600000).toISOString(), spawnAt: new Date(at).toISOString(), precisionSeconds: cycle ? 60 : 1 });
+    if (cycle === 1) {
+      const first = estimate(boss);
+      assert.ok(first.killSeconds > 30 && first.killSeconds < 60);
+    }
+  }
+  const learned = estimate(boss);
+  assert.equal(learned.sampleCount, 7);
+  assert.equal(learned.manualSampleCount, 7);
+  assert.ok(learned.killSeconds > 40 && learned.killSeconds < 60);
+  const last = boss.observations.at(-1);
+  boss.observations.push({ ...last, source: 'admin-repeat', cycleId: 'admin-repeat', capturedAt: new Date(Date.parse(last.capturedAt) + 60000).toISOString() });
+  assert.equal(estimate(boss).sampleCount, 7);
+  boss.observations.push({ ...last, source: 'screenshot-new', cycleId: 'verified-c7', capturedAt: new Date(Date.parse(last.capturedAt) + 120000).toISOString(), precisionSeconds: 1 });
+  assert.equal(estimate(boss).sampleCount, 7);
+  assert.equal(estimate(boss).latest.source, 'screenshot-new');
+  const copy = structuredClone(boss.observations);
+  bossTiming(boss, start + 100 * period);
+  assert.deepEqual(boss.observations, copy);
+});
+
+// 여러 회차 누락은 회차 수로 나누고 불가능한 입력 간격은 학습에서 제외합니다.
+test('관리자 기록의 누락 회차 정규화·분 오차·큰 오입력 제외', () => {
+  const start = Date.parse('2026-10-01T00:00:00+09:00');
+  const first = { source: 'admin-1', cycleId: 'c1', capturedAt: new Date(start - 60000).toISOString(), spawnAt: new Date(start).toISOString(), precisionSeconds: 60 };
+  const boss = { region: '테살리아', respawnHours: 8, observations: [first] };
+  boss.observations.push({ ...first, source: 'admin-2', cycleId: 'c2', capturedAt: new Date(start + 24 * 3600000 - 60000).toISOString(), spawnAt: new Date(start + 24 * 3600000 + 60000).toISOString() });
+  assert.equal(estimate(boss).sampleCount, 1);
+  assert.ok(estimate(boss).killSeconds > 15 && estimate(boss).killSeconds < 20);
+  boss.observations.push({ ...first, source: 'admin-wrong', cycleId: 'wrong', capturedAt: new Date(start + 25 * 3600000).toISOString(), spawnAt: new Date(start + 28 * 3600000).toISOString() });
+  assert.equal(estimate(boss).sampleCount, 1);
+  const uncertain = { region: '테살리아', respawnHours: 8, observations: [first, { ...first, source: 'admin-minus', cycleId: 'minus', spawnAt: new Date(start + 8 * 3600000 - 30000).toISOString(), capturedAt: new Date(start + 8 * 3600000 - 60000).toISOString() }] };
+  assert.equal(estimate(uncertain).sampleCount, 1);
+  assert.ok(estimate(uncertain).killSeconds >= 0);
+});
+
 // 더 이른 시각으로 수정해도 관리자 입력을 우선하고 실제 회차 학습을 유지합니다.
-test('관리자 수정은 예정 시각 순서와 관계없이 적용되며 학습 표본에서 제외', () => {
+test('큰 관리자 수정은 즉시 적용되지만 잘못된 회차 간격은 학습하지 않음', () => {
   const boss = structuredClone(catalog.bosses.find(item => item.id === 'alastor'));
   const before = estimate(boss);
   const now = Date.parse('2026-10-12T14:00:00+09:00');
@@ -48,7 +105,9 @@ test('12:25 관측 갱신, 두 보스만 새 연속 회차 표본 추가', () =>
     if (['chrysophagos', 'amorphos'].includes(boss.id)) {
       assert.equal(learned.latest.consecutiveFrom, previous.cycleId);
       assert.equal(learned.sampleCount, 1);
-      assert.equal(learned.interval, 8 * 3600000 + (boss.id === 'chrysophagos' ? 43000 : 14000));
+      assert.equal(learned.interval, 8 * 3600000 + learned.killSeconds * 1000);
+      assert.ok(learned.killSeconds >= Math.min(15, boss.id === 'chrysophagos' ? 43 : 14));
+      assert.ok(learned.killSeconds <= Math.max(15, boss.id === 'chrysophagos' ? 43 : 14));
     } else {
       assert.equal(learned.latest.cycleId, previous.cycleId);
       assert.equal(learned.sampleCount, 0);
@@ -58,7 +117,7 @@ test('12:25 관측 갱신, 두 보스만 새 연속 회차 표본 추가', () =>
 
 // 새 회차 한 마리와 기존 회차 보정을 구분하고 과거 원본을 보존합니다.
 test('13:52 관측 9마리 갱신, 알라스토르만 새 회차, 기존 연속 관계 유지', () => {
-  assert.equal(catalog.revision, '2026-10-12-screenshot-006-v1');
+  assert.equal(catalog.revision, '2026-10-12-screenshot-006-v2');
   assert.equal(catalog.source, 'screenshot-006');
   assert.equal(catalog.capturedAt, '2026-10-12T13:52:00+09:00');
   assert.equal(catalog.capturedSecondsKnown, false);
@@ -80,7 +139,9 @@ test('13:52 관측 9마리 갱신, 알라스토르만 새 회차, 기존 연속 
     }
     const added = { alastor: 141000, chrysophagos: 43000, amorphos: 74000 }[boss.id];
     assert.equal(learned.sampleCount, added ? 1 : 0);
-    assert.equal(learned.interval, boss.respawnHours * 3600000 + (added || 0));
+    assert.equal(learned.interval, boss.respawnHours * 3600000 + learned.killSeconds * 1000);
+    assert.ok(learned.killSeconds >= defaultKillSeconds(boss));
+    assert.ok(learned.killSeconds <= (added ? added / 1000 : defaultKillSeconds(boss)));
   }
   const now = Date.parse(catalog.capturedAt);
   const preferences = { bosses: ['bedix', 'tripork'], offsets: [600, 300, 60, 0], invasion: [] };
@@ -112,7 +173,7 @@ test('예정 시각 이후 반복 리스폰, 여러 회차·날짜 건너뛰기�
 test('반복 회차 푸시 예약, 매일 갱신해도 회차 키 유지와 미래 알림만 생성', () => {
   const boss = catalog.bosses.find(item => item.id === 'bedix');
   const at = Date.parse(estimate(boss).latest.spawnAt);
-  const now = at + 3 * 8 * 3600000 + 60000;
+  const now = at + 3 * estimate(boss).interval + 60000;
   const prefs = { bosses: [boss.id], offsets: [300, 0], invasion: [] };
   const events = plannedEvents(catalog, prefs, now);
   const timing = bossTiming(boss, now);
@@ -156,7 +217,7 @@ test('최근 최대 10개 연속 간격의 중앙값만 사용', () => {
   }
   const boss = { respawnHours: 8, observations };
   assert.equal(estimate(boss).sampleCount, 10);
-  assert.equal(estimate(boss).interval, 8 * 3600000 + 7500);
+  assert.equal(estimate(boss).interval, 8 * 3600000 + 7500 * 10 / 13);
   observations.push({ cycleId: 'missed', spawnAt: new Date(at + 16 * 3600000).toISOString() });
   assert.equal(estimate(boss).sampleCount, 10);
   observations.push({ cycleId: 'short', consecutiveFrom: 'missed', spawnAt: new Date(at + 17 * 3600000).toISOString() });

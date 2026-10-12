@@ -108,7 +108,7 @@ function tick() {
     const kind = card.querySelector('.kind');
     const manual = timing.latest.source?.startsWith('admin-');
     kind.textContent = timing.kind === 'observed' ? (manual ? '관리자 수정' : '관측 기준') : timing.sampleCount < 2 ? '추정 · 자료 부족' : timing.index > 1 ? '반복 추정' : '다음 회차 추정';
-    kind.title = timing.kind === 'predicted' ? `${timing.sampleCount < 2 ? '보정자료 부족' : `연속 회차 ${timing.sampleCount}개 기준`} · 기준 이후 ${timing.index}회차 추정` : manual ? '저장 시점부터 입력한 시간·분 적용' : '촬영 초 미상 · 시각 오차 있음';
+    kind.title = timing.kind === 'predicted' ? `처치시간 약 ${Math.round(timing.killSeconds)}초 · 기본 ${timing.defaultKillSeconds}초 · 보정 ${timing.sampleCount}개(관리자 포함 ${timing.manualSampleCount}개) · 기준 이후 ${timing.index}회차 추정` : manual ? '저장 시점부터 입력한 시간·분 적용' : '촬영 초 미상 · 시각 오차 있음';
   }
   for (const button of document.querySelectorAll('[data-hour]')) {
     const hour = Number(button.dataset.hour);
