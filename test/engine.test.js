@@ -7,6 +7,10 @@ const previousCatalog = structuredClone(catalog);
 for (const boss of previousCatalog.bosses) {
   boss.observations = boss.observations.filter(observation => Date.parse(observation.capturedAt) <= Date.parse('2026-10-12T12:01:00+09:00'));
 }
+const noonCatalog = structuredClone(catalog);
+for (const boss of noonCatalog.bosses) {
+  boss.observations = boss.observations.filter(observation => Date.parse(observation.capturedAt) <= Date.parse('2026-10-12T12:25:00+09:00'));
+}
 
 // 최신 표와 같은 회차 보정이 원본 시간 그대로 계산되는지 확인합니다.
 test('12:01 관측 9마리와 동일 회차 보정은 새 학습 표본이 아니다', () => {
@@ -20,15 +24,13 @@ test('12:01 관측 9마리와 동일 회차 보정은 새 학습 표본이 아�
 
 // 새 캡처의 예정값과 두 보스의 연속 회차 전환을 확인합니다.
 test('12:25 관측 갱신, 두 보스만 새 연속 회차 표본 추가', () => {
-  assert.equal(catalog.source, 'screenshot-005');
-  assert.equal(catalog.capturedAt, '2026-10-12T12:25:00+09:00');
-  assert.equal(catalog.capturedSecondsKnown, false);
   const expected = { tripork: '13:57:00', bedix: '13:54:00', gotsis: '19:16:00', alastor: '12:58:39', iokantos: '16:41:00', kini: '16:44:00', thrason: '16:57:00', chrysophagos: '20:21:00', amorphos: '20:23:00' };
-  for (const boss of catalog.bosses) {
+  for (const boss of noonCatalog.bosses) {
     const learned = estimate(boss);
     const previous = estimate(previousCatalog.bosses.find(item => item.id === boss.id)).latest;
     assert.equal(learned.latest.spawnAt, `2026-10-12T${expected[boss.id]}+09:00`);
     assert.equal(learned.latest.source, 'screenshot-005');
+    assert.equal(learned.latest.capturedAt, '2026-10-12T12:25:00+09:00');
     assert.deepEqual(boss.observations.slice(0, -1), previousCatalog.bosses.find(item => item.id === boss.id).observations);
     if (['chrysophagos', 'amorphos'].includes(boss.id)) {
       assert.equal(learned.latest.consecutiveFrom, previous.cycleId);
@@ -39,6 +41,41 @@ test('12:25 관측 갱신, 두 보스만 새 연속 회차 표본 추가', () =>
       assert.equal(learned.sampleCount, 0);
     }
   }
+});
+
+// 새 회차 한 마리와 기존 회차 보정을 구분하고 과거 원본을 보존합니다.
+test('13:52 관측 9마리 갱신, 알라스토르만 새 회차, 기존 연속 관계 유지', () => {
+  assert.equal(catalog.revision, '2026-10-12-screenshot-006-v1');
+  assert.equal(catalog.source, 'screenshot-006');
+  assert.equal(catalog.capturedAt, '2026-10-12T13:52:00+09:00');
+  assert.equal(catalog.capturedSecondsKnown, false);
+  const expected = { tripork: '13:56:59', bedix: '13:53:48', gotsis: '19:17:00', alastor: '21:01:00', iokantos: '16:41:00', kini: '16:44:00', thrason: '16:58:00', chrysophagos: '20:21:00', amorphos: '20:24:00' };
+  for (const boss of catalog.bosses) {
+    const learned = estimate(boss);
+    const previous = noonCatalog.bosses.find(item => item.id === boss.id);
+    assert.equal(learned.latest.spawnAt, `2026-10-12T${expected[boss.id]}+09:00`);
+    assert.equal(learned.latest.source, catalog.source);
+    assert.equal(learned.latest.capturedAt, catalog.capturedAt);
+    assert.equal(learned.latest.precisionSeconds, ['tripork', 'bedix'].includes(boss.id) ? 60 : 120);
+    assert.deepEqual(boss.observations.slice(0, -1), previous.observations);
+    if (boss.id === 'alastor') {
+      assert.notEqual(learned.latest.cycleId, estimate(previous).latest.cycleId);
+      assert.equal(learned.latest.consecutiveFrom, estimate(previous).latest.cycleId);
+    } else {
+      assert.equal(learned.latest.cycleId, estimate(previous).latest.cycleId);
+      assert.equal(learned.latest.consecutiveFrom, estimate(previous).latest.consecutiveFrom);
+    }
+    const added = { alastor: 141000, chrysophagos: 43000, amorphos: 74000 }[boss.id];
+    assert.equal(learned.sampleCount, added ? 1 : 0);
+    assert.equal(learned.interval, boss.respawnHours * 3600000 + (added || 0));
+  }
+  const now = Date.parse(catalog.capturedAt);
+  const preferences = { bosses: ['bedix', 'tripork'], offsets: [600, 300, 60, 0], invasion: [] };
+  const events = plannedEvents(catalog, preferences, now).filter(event => event.key.includes(':0:'));
+  assert.equal(events.length, 4);
+  assert.ok(events.every(event => event.dueAt > now));
+  assert.ok(events.every(event => !event.key.endsWith(':300') && !event.key.endsWith(':600')));
+  assert.equal(events.find(event => event.key.startsWith('bedix:') && event.key.endsWith(':0')).dueAt, Date.parse('2026-10-12T13:53:48+09:00'));
 });
 
 // 다음 한 회차까지만 추정하며 지난 추정을 다시 학습하지 않습니다.
