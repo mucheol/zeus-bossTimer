@@ -133,12 +133,17 @@ export async function deliver(env, id, now = Date.now(), send = fetch) {
     await env.DB.prepare("UPDATE jobs SET state='cancelled' WHERE id=?").bind(id).run();
     return;
   }
+  let stage = 'encrypt';
+  let providerStatus = 0;
   try {
     const subscription = JSON.parse(device.subscription);
     const options = await buildPushPayload({ data: job.payload, options: { ttl: Math.max(1, Math.floor((job.expires_at - now) / 1000)) } }, subscription, {
       subject: env.VAPID_SUBJECT, publicKey: env.VAPID_PUBLIC_KEY, privateKey: env.VAPID_PRIVATE_KEY
     });
-    const response = await send(subscription.endpoint, { ...options, redirect: 'error', signal: AbortSignal.timeout(10000) });
+    stage = 'request';
+    const response = await send(subscription.endpoint, { ...options, redirect: 'manual', signal: AbortSignal.timeout(10000) });
+    providerStatus = response.status;
+    stage = 'database';
     if (response.status === 404 || response.status === 410) {
       await env.DB.prepare('DELETE FROM devices WHERE id=?').bind(job.device_id).run();
       return;
@@ -147,6 +152,11 @@ export async function deliver(env, id, now = Date.now(), send = fetch) {
     await env.DB.prepare('UPDATE jobs SET state=? WHERE id=?').bind(response.ok ? 'sent' : 'failed', id).run();
     if (!response.ok) console.error('push-provider-rejected', response.status);
   } catch (error) {
+    const reason = error.message?.includes('Illegal invocation') ? 'illegal-invocation'
+      : error.message?.includes('AbortSignal.timeout') ? 'unsupported-timeout'
+      : error.message?.toLowerCase().includes('redirect') ? 'redirect'
+      : 'other';
+    console.error('push-step-failed', stage, error.name, providerStatus, reason);
     await env.DB.prepare("UPDATE jobs SET state='queued' WHERE id=? AND state='sending'").bind(id).run();
     throw error;
   }

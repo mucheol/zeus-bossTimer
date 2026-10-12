@@ -77,7 +77,7 @@ test('정각 예약 큐 발송, aes128gcm 암호화, 중복 실행 방지', asyn
     assert.equal(new Headers(options.headers).get('Content-Encoding'), 'aes128gcm');
     assert.ok(new Headers(options.headers).get('Authorization').startsWith('vapid '));
     assert.ok(options.body);
-    assert.equal(options.redirect, 'error');
+    assert.equal(options.redirect, 'manual');
     return new Response(null, { status: 201 });
   };
   await deliver(env, job.id, job.due_at + 1000, send);

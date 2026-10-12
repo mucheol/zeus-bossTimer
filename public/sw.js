@@ -36,15 +36,18 @@ self.addEventListener('fetch', event => {
   })());
 });
 
-// 운영체제의 기본 소리·진동 설정으로 유효한 푸시만 표시합니다.
+// Safari 구독을 유지하도록 수신한 푸시는 항상 사용자 알림으로 표시합니다.
 self.addEventListener('push', event => {
   event.waitUntil((async () => {
     let message;
-    try { message = event.data?.json(); } catch { return; }
-    if (!message || typeof message.title !== 'string' || message.expiresAt < Date.now()) return;
-    await self.registration.showNotification(message.title, {
-      body: message.body, icon: '/icons/icon-192.png', badge: '/icons/badge.png',
-      tag: message.tag, data: { url: '/' }
+    try { message = event.data?.json(); } catch { message = null; }
+    const late = Number.isFinite(message?.expiresAt) && message.expiresAt < Date.now();
+    const title = late ? '제우스 타이머 · 지연된 알림' : typeof message?.title === 'string' ? message.title : '제우스 타이머';
+    const body = late ? '전달이 늦었습니다. 최신 보스 시간표를 확인해 주세요.'
+      : typeof message?.body === 'string' ? message.body : '새 알림이 있습니다. 보스 시간표를 확인해 주세요.';
+    await self.registration.showNotification(title, {
+      body, icon: '/icons/icon-192.png', badge: '/icons/badge.png',
+      tag: typeof message?.tag === 'string' ? message.tag : 'zeus-message', data: { url: '/' }
     });
   })());
 });
