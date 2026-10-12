@@ -64,6 +64,14 @@ async function api(request, env) {
     return json({ connected: Boolean(row), preferences: row ? normalizePreferences(JSON.parse(row.preferences)) : null });
   }
   if (!ready) return json({ error: '운영자가 푸시 배포 설정을 완료하지 않았습니다.' }, 503);
+  if (url.pathname === '/api/preferences' && request.method === 'PUT') {
+    const body = await readBody(request);
+    const preferences = validatePreferences(body.preferences, catalog);
+    const device = await env.DB.prepare('SELECT subscription FROM devices WHERE id=?').bind(id).first();
+    if (!device) return json({ error: '이 기기의 알림을 먼저 연결해 주세요.' }, 409);
+    await saveDevice(env, id, JSON.parse(device.subscription), preferences, Date.now(), catalog);
+    return json({ ok: true });
+  }
   if (url.pathname === '/api/subscription' && request.method === 'PUT') {
     const body = await readBody(request);
     const preferences = validatePreferences(body.preferences, catalog);
@@ -80,7 +88,7 @@ async function api(request, env) {
     const key = `${id}:test:${crypto.randomUUID()}`;
     await env.DB.prepare('INSERT INTO jobs(id,device_id,due_at,expires_at,payload,state,lease_until) VALUES (?,?,?,?,?,\'queued\',?)')
       .bind(key, id, now + 10000, now + 130000, JSON.stringify({ title: '제우스 타이머 · 테스트', body: '알림 연결 성공! 소리·진동은 기기 설정을 따릅니다.', tag: 'zeus-test', expiresAt: now + 130000, url: '/' }), now + 120000).run();
-    await env.PUSH_QUEUE.send({ id: key }, { delaySeconds: 10 });
+    await enqueue(env, [{ id: key }], () => env.PUSH_QUEUE.send({ id: key }, { delaySeconds: 10 }));
     return json({ ok: true });
   }
   return json({ error: '요청 경로를 찾을 수 없습니다.' }, 404);
@@ -104,8 +112,19 @@ export async function schedule(env, now = Date.now()) {
     WHERE id IN (SELECT id FROM jobs WHERE due_at<=? AND expires_at>? AND attempts<4
     AND (state='pending' OR (state IN ('queued','sending') AND lease_until<?)) ORDER BY due_at LIMIT 100)
     RETURNING id`).bind(now + 120000, now, now, now).all();
-  if (jobs.length) await env.PUSH_QUEUE.sendBatch(jobs.map(job => ({ body: { id: job.id } })));
+  if (jobs.length) await enqueue(env, jobs, () => env.PUSH_QUEUE.sendBatch(jobs.map(job => ({ body: { id: job.id } }))));
   await env.DB.prepare('DELETE FROM jobs WHERE expires_at<?').bind(now - 7 * DAY).run();
+}
+
+// 큐 장애는 즉시 한 번 재시도하고 실패한 예약은 다음 실행에서 회수합니다.
+async function enqueue(env, jobs, send) {
+  try { await send(); } catch {
+    try { await send(); } catch (error) {
+      await env.DB.prepare(`UPDATE jobs SET state='pending',lease_until=0
+        WHERE state='queued' AND id IN (SELECT value FROM json_each(?))`).bind(JSON.stringify(jobs.map(job => job.id))).run();
+      throw error;
+    }
+  }
 }
 
 // 만료·취소 여부를 다시 확인한 뒤 한 기기의 암호화 푸시를 전송합니다.

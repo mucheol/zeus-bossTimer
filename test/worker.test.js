@@ -272,3 +272,67 @@ test('관리자 권한과 입력 경계, 인증 제한·세션 만료·최신 �
   const shared = await (await worker.fetch(request('/data/catalog.json', 'GET'), env)).json();
   assert.equal(shared.bosses.find(boss => boss.id === 'bedix').observations.at(-1).source, 'screenshot-007');
 });
+
+// 큐에 넣지 못한 예약은 임대에 갇히지 않고 유효 시간 안에 재시도합니다.
+test('큐 생산자 장애 즉시 재시도와 다음 분 예약 회수', async context => {
+  const env = await environment(context);
+  await worker.fetch(request('/api/subscription', 'PUT', { subscription: env.subscription, preferences: { bosses: [], offsets: [], invasion: [18] } }), env);
+  const job = await env.DB.prepare('SELECT * FROM jobs ORDER BY due_at LIMIT 1').first();
+  let attempts = 0;
+  env.PUSH_QUEUE.sendBatch = async () => { attempts++; throw new Error('queue-unavailable'); };
+  await assert.rejects(schedule(env, job.due_at));
+  assert.equal(attempts, 2);
+  assert.equal((await env.DB.prepare('SELECT state FROM jobs WHERE id=?').bind(job.id).first()).state, 'pending');
+  env.PUSH_QUEUE.sendBatch = async jobs => env.messages.push(...jobs.map(job => job.body));
+  await schedule(env, job.due_at + 60000);
+  assert.deepEqual(env.messages, [{ id: job.id }]);
+  await deliver(env, job.id, job.due_at + 60000, async () => new Response(null, { status: 201 }));
+  assert.equal((await env.DB.prepare('SELECT state FROM jobs WHERE id=?').bind(job.id).first()).state, 'sent');
+});
+
+// 개인 알림은 서로 독립이며 공통 수정·취소만 모든 기기에 보입니다.
+test('두 기기 개인 설정 격리, 관리자 이력·연속 되돌리기·동시 수정 방어', async context => {
+  const env = await environment(context);
+  let now = Date.parse('2026-10-12T16:00:00+09:00');
+  context.mock.method(Date, 'now', () => now);
+  const first = { enabled: true, bosses: ['bedix'], offsets: [60], invasion: [0] };
+  const second = { enabled: false, bosses: ['tripork'], offsets: [300], invasion: [18] };
+  await worker.fetch(request('/api/subscription', 'PUT', { subscription: env.subscription, preferences: first }), env);
+  await worker.fetch(request('/api/subscription', 'PUT', { subscription: { ...env.subscription, endpoint: `${env.subscription.endpoint}-second` }, preferences: second }, 'b'.repeat(64)), env);
+  const login = await worker.fetch(request('/api/admin/login', 'POST', { password: env.ADMIN_PASSWORD }), env);
+  const cookie = login.headers.get('Set-Cookie').split(';')[0];
+  // 인증된 관리자 요청만 만들고 비밀번호는 출력하지 않습니다.
+  const admin = async (path, method = 'GET', body) => {
+    const req = request(`/api/admin/${path}`, method, body);
+    req.headers.set('Cookie', cookie);
+    return worker.fetch(req, env);
+  };
+  assert.equal((await worker.fetch(request('/api/admin/history', 'GET'), env)).status, 401);
+  const original = await (await worker.fetch(request('/data/catalog.json', 'GET'), env)).json();
+  await admin('time', 'PUT', { bossId: 'bedix', hours: 0, minutes: 10 });
+  now += 1000;
+  await admin('time', 'PUT', { bossId: 'bedix', hours: 0, minutes: 20 });
+  let history = (await (await admin('history')).json()).entries;
+  assert.deepEqual(history.map(row => row.canUndo), [true, false]);
+  assert.equal((await admin('undo', 'POST', { id: history[1].id })).status, 409);
+  const latestId = history[0].id;
+  const undone = await admin('undo', 'POST', { id: latestId });
+  assert.equal(undone.status, 200);
+  assert.equal((await admin('undo', 'POST', { id: latestId })).status, 409);
+  history = (await (await admin('history')).json()).entries;
+  assert.equal(history[0].undoOf, latestId);
+  assert.equal(history[1].undoneBy, history[0].id);
+  assert.equal(history[2].canUndo, true);
+  await admin('undo', 'POST', { id: history[2].id });
+  const restored = (await (await worker.fetch(request('/data/catalog.json', 'GET', null, 'b'.repeat(64)), env)).json());
+  assert.deepEqual(restored.bosses, original.bosses);
+  assert.notEqual(restored.revision, original.revision);
+  assert.equal((await env.DB.prepare('SELECT COUNT(*) AS count FROM boss_updates').first()).count, 4);
+  const firstOff = { ...first, enabled: false };
+  assert.equal((await worker.fetch(request('/api/preferences', 'PUT', { preferences: firstOff }), env)).status, 200);
+  await schedule(env, now);
+  assert.deepEqual((await (await worker.fetch(request('/api/status'), env)).json()).preferences, firstOff);
+  assert.deepEqual((await (await worker.fetch(request('/api/status', 'POST', null, 'b'.repeat(64)), env)).json()).preferences, second);
+  assert.equal((await admin('history?before=2')).status, 200);
+  assert.equal((await worker.fetch(request('/api/admin/login', 'POST', []), env)).status, 400);
+});

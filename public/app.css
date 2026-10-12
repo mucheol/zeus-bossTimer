@@ -71,6 +71,7 @@ dialog::backdrop{background:#060a08b8;backdrop-filter:blur(4px)}
 .update-banner{position:fixed;bottom:0;left:0;right:0;background:var(--gold);color:#20251e;padding:15px;text-align:center;z-index:11;font-size:12px}.update-banner button{margin-left:15px;text-decoration:underline;font-weight:700}
 .loading{color:var(--muted);grid-column:1/-1;padding:20px 0}
 [hidden]{display:none!important}
+.admin-history{list-style:none;padding:0;margin:12px 0}.admin-history li{border-top:1px solid var(--line);padding:12px 0;font-size:12px}.admin-history strong,.admin-history small,.admin-history span{display:block}.admin-history small,.admin-history span{color:var(--muted);margin:4px 0}.admin-history button{margin-top:6px}
 @media(min-width:600px){.app{padding-top:30px}.intro{padding-top:36px}h1{font-size:42px}.boss-grid{gap:10px}.boss-card{padding:12px}.boss-top{min-height:39px}.portrait{width:34px;height:38px}.boss-identity h3{font-size:16px}.boss-meta{font-size:11px}.countdown{font-size:32px}.spawn-time{font-size:11px}.boss-alert{top:7px;right:7px}.invasion{padding:20px}.invasion-buttons button{min-height:72px}.observation-line{font-size:12px}.notice{font-size:12px}}
 @media(max-width:360px){.app{padding-left:14px;padding-right:14px}.boss-identity h3{font-size:12px}.portrait{width:24px;height:29px}.boss-time{gap:6px}.tiny-label{font-size:9px}}
 @media(prefers-reduced-motion:no-preference){button{transition:background .15s,border-color .15s}}

@@ -17,7 +17,7 @@ let installPrompt;
 let toastTimer;
 let saved = readStorage();
 let restored = false;
-let preferences = defaultPreferences();
+let preferences = normalizePreferences(saved.preferences || defaultPreferences());
 let order = Array.isArray(saved.order) ? saved.order : [];
 let sort = ['custom', 'level-asc', 'level-desc', 'time-asc', 'time-desc'].includes(saved.sort) ? saved.sort : (order.length ? 'custom' : 'level-desc');
 let drag;
@@ -29,6 +29,10 @@ let settingsSaving = false;
 let settingsMessage = '';
 let pushBusy = false;
 let checkingPush = false;
+let pushKnown = !saved.token;
+let catalogRequest = 0;
+let adminWriting = false;
+let historyBefore;
 
 // 손상되거나 사용이 차단된 기기 저장소를 안전하게 읽습니다.
 function readStorage() {
@@ -36,14 +40,16 @@ function readStorage() {
 }
 
 // 알림·정렬 설정과 기기 토큰을 저장합니다.
-function persist() {
+function persist(candidate = preferences, nextPending = pending) {
   try {
-    saved.preferences = structuredClone(preferences);
-    localStorage.setItem('zeus-settings', JSON.stringify({ token: saved.token, preferences, order, sort, pending }));
+    localStorage.setItem('zeus-settings', JSON.stringify({ token: saved.token, preferences: candidate, order, sort, pending: nextPending }));
+    saved.preferences = structuredClone(candidate);
     storageAvailable = true;
+    return true;
   } catch {
     storageAvailable = false;
     toast('기기 저장 공간을 사용할 수 없습니다. 브라우저 설정을 확인해 주세요.');
+    return false;
   }
 }
 
@@ -130,12 +136,13 @@ function renderSettings() {
   $('#disconnect').disabled = settingsSaving || pushBusy;
   $('#check-permission').disabled = settingsSaving || pushBusy || checkingPush;
   $('#settings-save').disabled = settingsSaving || pushBusy || !catalog;
-  $('#disconnect').hidden = !subscription;
-  $('#connect').hidden = connected;
-  $('#sync-status').textContent = connected ? (pending ? '변경사항 저장 대기 · 연결되면 다시 시도합니다.' : '이 기기의 알림 선택이 서버에 저장됐습니다.') : '선택은 이 기기에 저장됩니다. 알림 연결 후 적용됩니다.';
-  const title = !preferences.enabled ? '전체 알림 꺼짐' : connected ? '이 기기 알림 연결됨' : '화면을 닫아도 보스 알림';
+  $('#disconnect').hidden = !subscription && !connected;
+  $('#connect').hidden = connected && Boolean(subscription);
+  const unconfirmed = pending && Boolean(saved.token);
+  $('#sync-status').textContent = !pushKnown || unconfirmed ? '서버 적용 확인 대기 · 기존 알림이 도착할 수 있습니다. 연결되면 다시 시도합니다.' : connected ? '이 기기의 알림 선택이 서버에 저장됐습니다.' : '선택은 이 기기에 저장됩니다. 알림 연결 후 적용됩니다.';
+  const title = !preferences.enabled ? unconfirmed || !pushKnown ? '전체 알림 끄기 · 서버 확인 대기' : '전체 알림 꺼짐' : connected ? '이 기기 알림 연결됨' : '화면을 닫아도 보스 알림';
   $('#connect-banner strong').textContent = title;
-  $('#connect-banner small').textContent = !preferences.enabled ? (pending && connected ? '서버 저장 대기 · 아직 알림이 도착할 수 있습니다.' : '환경설정에서 다시 켜세요. 개별 선택은 유지됩니다.') : connected ? (pending ? '변경사항이 아직 서버에 저장되지 않았습니다.' : '필드 보스와 침공 시간을 선택해 주세요.') : '홈 화면에 추가하고 알림을 연결하세요.';
+  $('#connect-banner small').textContent = !preferences.enabled ? (unconfirmed || !pushKnown ? '서버 저장 대기 · 아직 알림이 도착할 수 있습니다.' : '환경설정에서 다시 켜세요. 개별 선택은 유지됩니다.') : connected ? (pending ? '변경사항이 아직 서버에 저장되지 않았습니다.' : '필드 보스와 침공 시간을 선택해 주세요.') : '홈 화면에 추가하고 알림을 연결하세요.';
   renderSettingsDraft();
 }
 
@@ -152,12 +159,12 @@ async function api(path, method = 'POST', body) {
 
 // 선택 변경을 순서대로 저장해 늦게 도착한 요청의 덮어쓰기를 막습니다.
 async function syncPreferences() {
-  if (!connected || !subscription || disconnecting || syncing || settingsSaving || !pending) return;
+  if (!connected || disconnecting || syncing || settingsSaving || !pending) return;
   syncing = true;
   try {
     while (pending && !disconnecting) {
       const snapshot = JSON.stringify(preferences);
-      await api('/api/subscription', 'PUT', { subscription: subscription.toJSON(), preferences: JSON.parse(snapshot) });
+      await api('/api/preferences', 'PUT', { preferences: JSON.parse(snapshot) });
       pending = snapshot !== JSON.stringify(preferences);
       persist();
     }
@@ -173,9 +180,12 @@ async function syncPreferences() {
 
 // 보스별 선택·침공 시간·알림 시점의 변경을 저장합니다.
 function toggle(key, value) {
-  preferences[key] = preferences[key].includes(value) ? preferences[key].filter(item => item !== value) : [...preferences[key], value];
+  if (settingsSaving) return;
+  const candidate = structuredClone(preferences);
+  candidate[key] = candidate[key].includes(value) ? candidate[key].filter(item => item !== value) : [...candidate[key], value];
+  if (!persist(candidate, true)) return;
+  preferences = candidate;
   pending = true;
-  persist();
   renderSettings();
   renderBosses();
   if (!connected) toast('선택 저장됨 · 알림 설정에서 연결하면 적용됩니다.');
@@ -197,18 +207,25 @@ function applyCatalog(next, offline = false) {
 
 // 최신 공통 자료를 읽고 오프라인 캐시 여부를 명확히 표시합니다.
 async function refresh() {
+  if (adminWriting) return;
+  const requestId = ++catalogRequest;
   $('#refresh').disabled = true;
   try {
     const response = await fetch('/data/catalog.json', { cache: 'no-store', signal: AbortSignal.timeout(15000) });
     if (!response.ok) throw new Error('관측 자료를 불러올 수 없습니다.');
-    applyCatalog(await response.json(), response.headers.get('X-Zeus-Offline') === '1');
+    const next = await response.json();
+    if (requestId === catalogRequest) {
+      const offline = response.headers.get('X-Zeus-Offline') === '1';
+      applyCatalog(offline && catalog ? catalog : next, offline);
+    }
   } catch (error) {
+    if (requestId !== catalogRequest) return;
     $('#network').textContent = '연결 끊김';
     if (!catalog) {
       $('#boss-list').innerHTML = '<p class="loading">자료를 불러오지 못했습니다. 연결을 확인하고 새로고침해 주세요.</p>';
       toast(error.message);
     }
-  } finally { $('#refresh').disabled = false; }
+  } finally { if (requestId === catalogRequest) $('#refresh').disabled = false; }
 }
 
 // PWA 설치 환경과 권한에 맞는 알림 안내를 표시합니다.
@@ -243,6 +260,7 @@ async function connect() {
     const snapshot = JSON.stringify(preferences);
     await api('/api/subscription', 'PUT', { subscription: candidate.toJSON(), preferences: JSON.parse(snapshot) });
     connected = true;
+    pushKnown = true;
     pending = snapshot !== JSON.stringify(preferences);
     persist();
     $('#push-status').textContent = '알림 연결됨 · 테스트로 잠금 화면 수신을 확인하세요.';
@@ -266,6 +284,9 @@ async function disconnect() {
     if (syncing) await new Promise(resolve => { syncTask = { resolve }; });
     await api('/api/subscription', 'DELETE');
     connected = false;
+    pushKnown = true;
+    pending = false;
+    persist();
     if (subscription) await subscription.unsubscribe();
     subscription = null;
     $('#push-status').textContent = '알림 연결을 해제했습니다. 선택은 기기에 남아 있습니다.';
@@ -286,10 +307,10 @@ async function initializePush() {
     if (!('serviceWorker' in navigator)) throw new Error(pushSupport());
     registration = await navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' });
     await navigator.serviceWorker.ready;
-    config = await fetch('/api/config', { cache: 'no-store', signal: AbortSignal.timeout(15000) }).then(response => response.json());
     subscription = await registration.pushManager?.getSubscription();
-    if (subscription && saved.token) {
+    if (saved.token) {
       const status = await api('/api/status');
+      pushKnown = true;
       connected = status.connected;
       if (connected && !pending && catalog) {
         const changed = settingsChanged();
@@ -299,7 +320,8 @@ async function initializePush() {
       }
       if (connected) await syncPreferences();
     }
-    $('#push-status').textContent = pushSupport() || (connected ? '이 기기의 시스템 알림이 연결되어 있습니다.' : config.ready ? '원하는 알림을 선택하고 알림을 연결하세요.' : '화면 사용 가능 · 운영자의 푸시 배포 설정이 필요합니다.');
+    config = await fetch('/api/config', { cache: 'no-store', signal: AbortSignal.timeout(15000) }).then(response => { if (!response.ok) throw new Error('푸시 설정 확인에 실패했습니다.'); return response.json(); });
+    $('#push-status').textContent = pushSupport() || (connected ? subscription ? '이 기기의 시스템 알림이 연결되어 있습니다.' : '기존 서버 예약이 있습니다. 알림을 다시 연결해 주세요.' : config.ready ? '원하는 알림을 선택하고 알림을 연결하세요.' : '화면 사용 가능 · 운영자의 푸시 배포 설정이 필요합니다.');
     renderSettings();
     renderBosses();
   } catch (error) { $('#push-status').textContent = error.message || '알림 연결을 확인할 수 없습니다.'; } finally { checkingPush = false; renderSettings(); }
@@ -308,6 +330,7 @@ async function initializePush() {
 // 저장된 값의 사본으로 환경설정 편집을 시작합니다.
 function openSettings() {
   if ($('#settings').open) return;
+  if (!restored) { toast('보스 자료와 저장된 설정을 불러오는 중입니다. 잠시 후 다시 열어 주세요.'); return; }
   settingsDraft = structuredClone(preferences);
   settingsMessage = '';
   renderSettings();
@@ -374,16 +397,25 @@ async function saveSettings() {
   renderSettings();
   try {
     if (syncing) await new Promise(resolve => { syncTask = { resolve }; });
-    if (connected) await api('/api/subscription', 'PUT', { subscription: subscription.toJSON(), preferences: candidate });
+    if (!persist(candidate, true)) throw new Error('기기 저장에 실패했습니다. 저장소 권한을 확인한 뒤 다시 저장해 주세요.');
     preferences = candidate;
-    pending = !connected;
-    persist();
-    if (!storageAvailable) throw new Error('기기 저장에 실패했습니다. 저장소 권한을 확인해 주세요.');
+    pending = true;
+    if (connected) {
+      try {
+        await api('/api/preferences', 'PUT', { preferences: candidate });
+        pending = false;
+        persist();
+      } catch { /* 기기에 저장한 변경은 다음 연결에서 재전송합니다. */ }
+    }
     settingsDraft = null;
     $('#settings').close();
     renderBosses();
-    toast(!preferences.enabled ? '전체 알림을 껐습니다. 개별 선택은 유지됩니다.' : connected ? '알림 설정을 저장했습니다.' : '기기에 저장했습니다. 푸시 알림을 연결해 주세요.');
-  } catch (error) { settingsMessage = `저장 실패: ${error.message}`; } finally { settingsSaving = false; renderSettings(); }
+    toast(pending && saved.token ? '기기에 저장됨 · 서버 적용 대기 중이며 기존 알림이 도착할 수 있습니다.' : !preferences.enabled ? '전체 알림을 껐습니다. 개별 선택은 유지됩니다.' : connected ? '알림 설정을 저장했습니다.' : '기기에 저장했습니다. 푸시 알림을 연결해 주세요.');
+  } catch (error) { settingsMessage = `저장 실패: ${error.message}`; } finally {
+    settingsSaving = false;
+    renderSettings();
+    if (pending && !connected) void initializePush();
+  }
 }
 
 // 현재 기기에 맞는 시스템 알림 설정 경로를 안내합니다.
@@ -422,6 +454,42 @@ async function adminRequest(path, method = 'GET', body) {
 // 기존의 유효한 관리자 세션을 복원합니다.
 async function restoreAdmin() {
   try { setAdministrator((await adminRequest('status')).authenticated); } catch { setAdministrator(false); }
+}
+
+// 관리자 저장 중에는 이전에 시작한 공통 자료 요청을 무효화합니다.
+async function changeBossTime(path, method, body) {
+  if (adminWriting) throw new Error('다른 수정이 저장 중입니다. 잠시 후 다시 시도해 주세요.');
+  adminWriting = true;
+  catalogRequest++;
+  try {
+    const result = await adminRequest(path, method, body);
+    applyCatalog(result.catalog);
+  } finally {
+    adminWriting = false;
+    $('#refresh').disabled = false;
+    void refresh();
+  }
+}
+
+// 관리자 수정·취소 이력을 최신순으로 불러옵니다.
+async function loadHistory(more = false) {
+  $('#history-more').disabled = true;
+  $('#history-refresh').disabled = true;
+  try {
+    const result = await adminRequest(`history${more && historyBefore ? `?before=${historyBefore}` : ''}`);
+    const html = result.entries.map(entry => {
+      const boss = catalog?.bosses.find(item => item.id === entry.bossId);
+      return `<li><strong>${escape(boss?.name || entry.bossId)} · ${entry.undoOf ? `#${entry.undoOf} 수정 되돌림` : '시간 수정'}</strong><small>#${entry.id} · ${koreanTime(entry.recordedAt, true, true)}</small>${entry.undoOf ? '' : `<span>출현 예정 ${koreanTime(entry.spawnAt, true, true)}${entry.undoneBy ? ' · 취소됨' : ''}</span>`}${entry.canUndo ? `<button class="secondary" data-undo="${entry.id}">이 수정 되돌리기</button>` : ''}</li>`;
+    }).join('');
+    if (more) $('#admin-history').insertAdjacentHTML('beforeend', html);
+    else $('#admin-history').innerHTML = html || '<li>아직 관리자 수정 이력이 없습니다.</li>';
+    historyBefore = result.nextBefore;
+    $('#history-more').hidden = !historyBefore;
+    $('#admin-status').textContent = '';
+  } catch (error) { $('#admin-status').textContent = error.message; } finally {
+    $('#history-more').disabled = false;
+    $('#history-refresh').disabled = false;
+  }
 }
 
 // 선택한 보스의 공통 남은 시간·분 입력창을 엽니다.
@@ -540,6 +608,7 @@ $('#admin-open').addEventListener('click', async () => {
   await restoreAdmin();
   $('#admin-status').textContent = '';
   if (!$('#admin-panel').open) $('#admin-panel').showModal();
+  if (administrator) void loadHistory();
 });
 $('#admin-close').addEventListener('click', () => $('#admin-panel').close());
 $('#boss-edit-close').addEventListener('click', () => $('#boss-editor').close());
@@ -563,11 +632,21 @@ $('#boss-edit-form').addEventListener('submit', async event => {
   event.preventDefault();
   $('#boss-edit-save').disabled = true;
   try {
-    const result = await adminRequest('time', 'PUT', { bossId: editedBoss, hours: Number($('#boss-hours').value), minutes: Number($('#boss-minutes').value) });
-    applyCatalog(result.catalog);
+    await changeBossTime('time', 'PUT', { bossId: editedBoss, hours: Number($('#boss-hours').value), minutes: Number($('#boss-minutes').value) });
     $('#boss-editor').close();
     toast('공통 시간 저장됨 · 다른 앱에도 15초 이내 반영됩니다.');
   } catch (error) { $('#boss-edit-status').textContent = error.message; } finally { $('#boss-edit-save').disabled = false; }
+});
+$('#history-refresh').addEventListener('click', () => loadHistory());
+$('#history-more').addEventListener('click', () => loadHistory(true));
+$('#admin-history').addEventListener('click', async event => {
+  const button = event.target.closest('[data-undo]');
+  if (!button || adminWriting || !confirm('이 수정을 취소하고 이전 시간 기준으로 복원할까요? 모든 앱에 공유됩니다.')) return;
+  button.disabled = true;
+  try {
+    await changeBossTime('undo', 'POST', { id: Number(button.dataset.undo) });
+    toast('이전 시간 기준으로 복원했습니다. 모든 앱에 반영됩니다.');
+  } catch (error) { toast(error.message); } finally { await loadHistory(); }
 });
 $('#connect-banner').addEventListener('click', openSettings);
 $('#settings-close').addEventListener('click', closeSettings);
@@ -638,13 +717,13 @@ window.addEventListener('beforeinstallprompt', event => { event.preventDefault()
 $('#install').addEventListener('click', async () => { await installPrompt?.prompt(); installPrompt = null; $('#install').hidden = true; });
 navigator.serviceWorker?.addEventListener('message', event => { if (event.data?.type === 'UPDATED') $('#update-banner').hidden = false; });
 $('#apply-update').addEventListener('click', () => location.reload());
-document.addEventListener('visibilitychange', () => { if (!document.hidden) { tick(); void refresh(); void syncPreferences(); void registration?.update(); } });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { tick(); void refresh(); void initializePush(); void registration?.update(); } });
 window.addEventListener('focus', tick);
 window.addEventListener('pageshow', tick);
-window.addEventListener('online', () => { void refresh(); void syncPreferences(); });
+window.addEventListener('online', () => { void refresh(); void initializePush(); });
 window.addEventListener('offline', () => { $('#network').textContent = '오프라인 자료'; });
 // 자료 요청과 별개로 기기 시각에 맞춰 화면을 계속 갱신합니다.
 setInterval(tick, 1000);
-setInterval(() => { if (!document.hidden) { void refresh(); void syncPreferences(); } }, 15000);
+setInterval(() => { if (!document.hidden) { void refresh(); if (!config || !pushKnown || (!connected && pending && saved.token)) void initializePush(); else void syncPreferences(); } }, 15000);
 void refresh().then(initializePush);
 void restoreAdmin();

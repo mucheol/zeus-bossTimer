@@ -73,7 +73,13 @@
   <dialog id="admin-panel">
     <div class="dialog-heading"><h2>관리자</h2><button id="admin-close" class="icon-button" aria-label="관리자 창 닫기">×</button></div>
     <form id="admin-login"><label class="input-label" for="admin-password">비밀번호</label><input id="admin-password" type="password" required maxlength="256" autocomplete="current-password"><button id="admin-login-submit" class="primary" type="submit">관리자 인증</button></form>
-    <div id="admin-authorized" hidden><p class="settings-copy">관리자 모드입니다. 목록의 보스를 눌러 공통 시간을 수정하세요.</p><button id="admin-logout" class="secondary">관리자 종료</button></div>
+    <div id="admin-authorized" hidden>
+      <p class="settings-copy">관리자 모드입니다. 목록의 보스를 눌러 공통 시간을 수정하세요. 보스 시간은 모두에게 공유되며 알람·정렬 설정은 각 기기에만 적용됩니다.</p>
+      <button id="admin-logout" class="secondary">관리자 종료</button>
+      <hr><div class="section-line"><h3>관리자 수정 이력</h3><button id="history-refresh" class="secondary">새로고침</button></div>
+      <p class="small-note">보스별 현재 적용된 최신 수정을 되돌릴 수 있습니다. 이전 시간 기준으로 복원하며, 기록은 삭제하지 않습니다.</p>
+      <ol id="admin-history" class="admin-history"></ol><button id="history-more" class="secondary" hidden>이전 이력 더 보기</button>
+    </div>
     <p id="admin-status" class="small-note" role="status"></p>
   </dialog>
   <dialog id="boss-editor" aria-labelledby="boss-edit-title" aria-describedby="boss-edit-description">

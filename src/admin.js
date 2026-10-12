@@ -52,6 +52,37 @@ export async function adminApi(request, env) {
     const authenticated = await session(request, env);
     if (path === '/api/admin/status' && request.method === 'GET') return json({ authenticated: Boolean(authenticated) });
     if (!authenticated) return json({ error: '관리자 인증이 필요합니다.' }, 401);
+    if (path === '/api/admin/history' && request.method === 'GET') {
+      const before = Number(new URL(request.url).searchParams.get('before') || Number.MAX_SAFE_INTEGER);
+      if (!Number.isSafeInteger(before) || before < 1) throw invalid('조회 위치가 올바르지 않습니다.');
+      const catalog = await loadCatalog(env);
+      const { results } = await env.DB.prepare(`SELECT u.*, r.id AS undone_by,
+        (SELECT MAX(a.id) FROM boss_updates a WHERE a.boss_id=u.boss_id AND a.undo_of IS NULL
+          AND NOT EXISTS (SELECT 1 FROM boss_updates b WHERE b.undo_of=a.id)) AS latest_id
+        FROM boss_updates u LEFT JOIN boss_updates r ON r.undo_of=u.id
+        WHERE u.id<? ORDER BY u.id DESC LIMIT 50`).bind(before).all();
+      return json({ entries: results.map(row => ({ id: row.id, bossId: row.boss_id, recordedAt: row.recorded_at,
+        spawnAt: row.spawn_at, undoOf: row.undo_of, undoneBy: row.undone_by,
+        canUndo: row.undo_of === null && !row.undone_by && row.id === row.latest_id &&
+          catalog.bosses.find(boss => boss.id === row.boss_id)?.observations.at(-1).source === `admin-${row.id}` })),
+        nextBefore: results.length === 50 ? results.at(-1).id : null });
+    }
+    if (path === '/api/admin/undo' && request.method === 'POST') {
+      const { id } = await readBody(request);
+      if (!Number.isSafeInteger(id) || id < 1) throw invalid('수정 이력이 올바르지 않습니다.');
+      const catalog = await loadCatalog(env);
+      const target = await env.DB.prepare('SELECT * FROM boss_updates WHERE id=?').bind(id).first();
+      if (!target || catalog.bosses.find(boss => boss.id === target.boss_id)?.observations.at(-1).source !== `admin-${id}`) {
+        return json({ error: '현재 적용된 최신 수정만 되돌릴 수 있습니다. 이력을 새로고침해 주세요.' }, 409);
+      }
+      const result = await env.DB.prepare(`INSERT INTO boss_updates(boss_id,recorded_at,spawn_at,undo_of)
+        SELECT boss_id,?,spawn_at,id FROM boss_updates u WHERE id=? AND undo_of IS NULL
+        AND NOT EXISTS (SELECT 1 FROM boss_updates r WHERE r.undo_of=u.id)
+        AND NOT EXISTS (SELECT 1 FROM boss_updates n WHERE n.boss_id=u.boss_id AND n.id>u.id AND n.undo_of IS NULL
+          AND NOT EXISTS (SELECT 1 FROM boss_updates r WHERE r.undo_of=n.id))`).bind(Date.now(), id).run();
+      if (!result.meta.changes) return json({ error: '다른 수정이 먼저 적용됐습니다. 이력을 새로고침해 주세요.' }, 409);
+      return json({ catalog: await loadCatalog(env) });
+    }
     if (path === '/api/admin/logout' && request.method === 'POST') {
       await env.DB.prepare('DELETE FROM admin_sessions WHERE id=?').bind(authenticated.id).run();
       return json({ authenticated: false }, 200, sessionCookie('', 0));

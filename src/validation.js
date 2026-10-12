@@ -20,7 +20,11 @@ export async function readBody(request) {
   const bytes = new Uint8Array(size);
   let position = 0;
   for (const chunk of chunks) { bytes.set(chunk, position); position += chunk.length; }
-  try { return JSON.parse(new TextDecoder().decode(bytes)); } catch { throw invalid('JSON을 읽을 수 없습니다.'); }
+  try {
+    const value = JSON.parse(new TextDecoder().decode(bytes));
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw invalid('JSON 객체가 필요합니다.');
+    return value;
+  } catch { throw invalid('JSON 객체를 읽을 수 없습니다.'); }
 }
 
 // 잘못된 외부 입력을 사용자에게 설명할 오류로 바꿉니다.
