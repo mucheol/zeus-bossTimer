@@ -40,7 +40,6 @@ h2{font-size:14px;margin:0;font-weight:650;letter-spacing:-.3px}.section-icon{co
 .boss-time{display:flex;align-items:center;gap:7px;margin-top:5px;min-width:0}
 .portrait{flex-shrink:0;width:27px;height:31px;border-radius:6px;background-image:url('/images/bosses.png');background-size:1145.455% 490.909%;background-repeat:no-repeat;border:1px solid #4b5040}
 .countdown{margin:0;color:var(--text);font-size:clamp(19px,5.8vw,25px);font-weight:750;letter-spacing:-1px;line-height:1.3;font-variant-numeric:tabular-nums;white-space:nowrap}
-.time-unit{font-size:.58em;font-weight:550;letter-spacing:0}
 .boss-card.soon .countdown{color:var(--gold)}
 .boss-card.stale .countdown{font-size:18px;color:var(--muted)}
 .spawn-time{color:#afbbb1;font-size:9px;white-space:nowrap;font-variant-numeric:tabular-nums}

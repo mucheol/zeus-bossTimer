@@ -73,7 +73,7 @@ function renderBosses() {
     const enabled = preferences.bosses.includes(boss.id);
     return `<article class="boss-card" data-boss="${escape(boss.id)}" data-alert-enabled="${enabled}">
       <div class="boss-top"><div class="boss-identity"><h3>${escape(boss.name)}</h3><span class="boss-meta">Lv.${boss.level} · ${escape(boss.region)}</span></div><button class="boss-alert" data-alert="${escape(boss.id)}" aria-label="${escape(boss.name)} 알림" aria-pressed="${enabled}">${bell}<span>${enabled ? '켜짐' : '알림'}</span></button></div>
-      <div class="boss-time"><div class="portrait" role="img" aria-label="${escape(boss.name)} 초상화" style="background-position:${x}% ${y}%"></div><div class="countdown"></div></div>
+      <div class="boss-time"><div class="portrait" role="img" aria-label="${escape(boss.name)} 초상화" style="background-position:${x}% ${y}%"></div><div class="countdown" role="timer" title="남은 시간 · 시:분:초"></div></div>
       <div class="card-bottom"><span class="kind"></span><span class="spawn-time"></span></div>
       ${editing ? `<div class="move-buttons"><button data-move="${escape(boss.id)}" data-direction="-1" aria-label="${escape(boss.name)} 앞으로" ${index === 0 ? 'disabled' : ''}>←</button><button class="drag-handle" data-drag="${escape(boss.id)}" aria-label="${escape(boss.name)} 순서 이동" title="끌어서 이동 · 방향키로 한 칸 이동">⠿</button><button data-move="${escape(boss.id)}" data-direction="1" aria-label="${escape(boss.name)} 뒤로" ${index === bosses.length - 1 ? 'disabled' : ''}>→</button></div>` : ''}
     </article>`;
@@ -98,7 +98,11 @@ function tick() {
     const timing = bossTiming(boss, now);
     for (const kind of ['observed', 'predicted', 'stale']) card.classList.toggle(kind, timing.kind === kind);
     card.classList.toggle('soon', timing.at !== null && timing.at - now < 600000);
-    card.querySelector('.countdown').innerHTML = escape(remaining(timing.at, now)).replace(/(시간|분|초)/g, '<span class="time-unit">$1</span>');
+    const countdown = card.querySelector('.countdown');
+    const text = remaining(timing.at, now);
+    countdown.textContent = text;
+    const parts = text.split(':');
+    countdown.setAttribute('aria-label', timing.at === null ? text : `${Number(parts[0])}시간 ${Number(parts[1])}분 ${Number(parts[2])}초 남음`);
     card.querySelector('.spawn-time').textContent = timing.at ? `${koreanTime(timing.at)} 예정` : `관측 ${koreanTime(Date.parse(timing.latest.capturedAt))}`;
     const kind = card.querySelector('.kind');
     kind.textContent = ({ observed: '관측 기준', predicted: timing.sampleCount < 2 ? '추정 · 자료 부족' : '다음 회차 추정', stale: '갱신 필요' })[timing.kind];
@@ -437,7 +441,9 @@ window.addEventListener('beforeinstallprompt', event => { event.preventDefault()
 $('#install').addEventListener('click', async () => { await installPrompt?.prompt(); installPrompt = null; $('#install').hidden = true; });
 navigator.serviceWorker?.addEventListener('message', event => { if (event.data?.type === 'UPDATED') $('#update-banner').hidden = false; });
 $('#apply-update').addEventListener('click', () => location.reload());
-document.addEventListener('visibilitychange', () => { if (!document.hidden) { void refresh(); void syncPreferences(); void registration?.update(); } });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { tick(); void refresh(); void syncPreferences(); void registration?.update(); } });
+window.addEventListener('focus', tick);
+window.addEventListener('pageshow', tick);
 window.addEventListener('online', () => { void refresh(); void syncPreferences(); });
 window.addEventListener('offline', () => { $('#network').textContent = '오프라인 자료'; });
 await refresh();

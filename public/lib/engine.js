@@ -47,13 +47,12 @@ export function koreanTime(time, withDate = false) {
   }).format(time);
 }
 
-// 남은 시간을 분 중심의 읽기 쉬운 문구로 만듭니다.
+// 기기 현재 시각과의 차이를 시:분:초로 표시합니다.
 export function remaining(at, now = Date.now()) {
   if (at === null) return '새 관측 대기';
   const seconds = Math.max(0, Math.ceil((at - now) / 1000));
-  if (seconds < 60) return `${seconds}초`;
-  const minutes = Math.ceil(seconds / 60);
-  return minutes >= 60 ? `${Math.floor(minutes / 60)}시간 ${minutes % 60}분` : `${minutes}분`;
+  return [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60]
+    .map(value => String(value).padStart(2, '0')).join(':');
 }
 
 // 한국시간 자정부터 지정 일수의 침공 정각 일정을 만듭니다.

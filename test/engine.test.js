@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import catalog from '../public/data/catalog.json' with { type: 'json' };
-import { estimate, bossTiming, invasionTimes, plannedEvents, orderedBosses, defaultPreferences } from '../public/lib/engine.js';
+import { estimate, bossTiming, invasionTimes, plannedEvents, orderedBosses, defaultPreferences, remaining } from '../public/lib/engine.js';
 
 const previousCatalog = structuredClone(catalog);
 for (const boss of previousCatalog.bosses) {
@@ -84,6 +84,22 @@ test('관측 이후 한 회차 추정, 그 이후에는 자료 대기', () => {
   assert.equal(bossTiming(boss, Date.parse('2026-10-12T14:00:00+09:00')).kind, 'predicted');
   assert.equal(bossTiming(boss, Date.parse('2026-10-13T02:00:00+09:00')).kind, 'stale');
   assert.equal(estimate(boss).sampleCount, 0);
+});
+
+// 기기 시각 차이를 초 단위로 표시하며 시간 변경과 경계값을 처리합니다.
+test('실시간 남은 시간, 시·분 경계, 기기 시각 변경과 만료', () => {
+  const now = Date.parse('2026-10-12T13:52:00+09:00');
+  const at = now + 3600000;
+  assert.equal(remaining(at, now), '01:00:00');
+  assert.equal(remaining(at, now + 1000), '00:59:59');
+  assert.equal(remaining(at, now + 3540000), '00:01:00');
+  assert.equal(remaining(at, now + 3541000), '00:00:59');
+  assert.equal(remaining(at, now + 3599999), '00:00:01');
+  assert.equal(remaining(at, at), '00:00:00');
+  assert.equal(remaining(at, at + 60000), '00:00:00');
+  assert.equal(remaining(at, now - 60000), '01:01:00');
+  assert.equal(remaining(now + 12 * 3600000, now), '12:00:00');
+  assert.equal(remaining(null, now), '새 관측 대기');
 });
 
 // 명시된 연속 회차만 중앙값에 사용하고 짧거나 누락된 간격은 제외합니다.
