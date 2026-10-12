@@ -43,7 +43,7 @@ export function selection(value, allowed) {
 // 등록된 보스와 지원 시점에 한해서 기기 설정을 검증합니다.
 export function validatePreferences(value, catalog) {
   if (!value || typeof value !== 'object') throw invalid('알림 설정이 필요합니다.');
-  if (value.enabled !== undefined && typeof value.enabled !== 'boolean') throw invalid('전체 알림 설정이 올바르지 않습니다.');
+  if (value.enabled !== undefined && typeof value.enabled !== 'boolean') throw invalid('어플 알림 설정이 올바르지 않습니다.');
   return normalizePreferences({
     enabled: value.enabled,
     bosses: selection(value.bosses, catalog.bosses.map(boss => boss.id)),

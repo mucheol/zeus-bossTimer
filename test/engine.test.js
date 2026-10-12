@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import catalog from '../public/data/catalog.json' with { type: 'json' };
-import { estimate, bossTiming, invasionTimes, plannedEvents, orderedBosses, defaultPreferences, remaining, defaultKillSeconds, normalizePreferences, koreanTime } from '../public/lib/engine.js';
+import { estimate, bossTiming, invasionTimes, plannedEvents, orderedBosses, defaultPreferences, remaining, normalizePreferences, koreanTime } from '../public/lib/engine.js';
 
 const previousCatalog = structuredClone(catalog);
 for (const boss of previousCatalog.bosses) {
@@ -21,6 +21,11 @@ for (const boss of preciseCatalog.bosses) {
   boss.observations = boss.observations.filter(observation => Date.parse(observation.capturedAt) <= Date.parse(preciseCatalog.capturedAt));
 }
 
+const secondsCatalog = { ...structuredClone(catalog), revision: '2026-10-12-screenshot-008-v1', source: 'screenshot-008', capturedAt: '2026-10-12T16:30:20+09:00', capturedSecondsKnown: true };
+for (const boss of secondsCatalog.bosses) {
+  boss.observations = boss.observations.filter(observation => Date.parse(observation.capturedAt) <= Date.parse(secondsCatalog.capturedAt));
+}
+
 // 이전 시점은 새 선택으로 이관하며 전체 중지는 선택 자체를 지우지 않습니다.
 test('1·3·5분 시점·기존 설정 이관·전체 알림 중지와 복원', () => {
   assert.deepEqual(defaultPreferences(), { enabled: true, bosses: [], offsets: [300], invasion: [] });
@@ -37,10 +42,10 @@ test('1·3·5분 시점·기존 설정 이관·전체 알림 중지와 복원', 
   assert.deepEqual(plannedEvents(catalog, prefs, now), before);
 });
 
-// 보정자료가 없을 때는 지정한 지역 기본값을 매 회차 한 번만 더합니다.
-test('테살리아 15초·자하브 30초 기본 처치시간과 화면·푸시 일치', () => {
+// 정확한 초 단위 연속 자료가 없으면 임의의 처치시간을 더하지 않습니다.
+test('지역별 기본 처치시간 제거·0초 반복과 화면·푸시 일치', () => {
   const start = Date.parse('2026-10-12T00:00:00+09:00');
-  for (const [region, seconds] of [['테살리아', 15], ['자하브', 30]]) {
+  for (const [region, seconds] of [['테살리아', 0], ['자하브', 0]]) {
     const boss = { id: 'test', name: '테스트', region, respawnHours: 8, observations: [{ cycleId: 'c0', capturedAt: new Date(start - 60000).toISOString(), spawnAt: new Date(start).toISOString() }] };
     const model = estimate(boss);
     assert.equal(model.killSeconds, seconds);
@@ -52,7 +57,7 @@ test('테살리아 15초·자하브 30초 기본 처치시간과 화면·푸시 
 });
 
 // 관리자 보정과 이미지의 같은 회차는 하나로 세고 간격 자료만 누적합니다.
-test('이미지·관리자 이력 혼합, 동일 회차 중복 제외와 점진적 보정', () => {
+test('분 단위 관리자 수정은 기준에 반영하되 처치시간으로 학습하지 않음', () => {
   const start = Date.parse('2026-10-01T00:00:00+09:00');
   const period = 8 * 3600000 + 60000;
   const boss = { region: '자하브', respawnHours: 8, observations: [] };
@@ -61,18 +66,18 @@ test('이미지·관리자 이력 혼합, 동일 회차 중복 제외와 점진�
     boss.observations.push({ source: cycle ? `admin-${cycle}` : 'screenshot', cycleId: `c${cycle}`, capturedAt: new Date(at - 600000).toISOString(), spawnAt: new Date(at).toISOString(), precisionSeconds: cycle ? 60 : 1 });
     if (cycle === 1) {
       const first = estimate(boss);
-      assert.ok(first.killSeconds > 30 && first.killSeconds < 60);
+      assert.equal(first.killSeconds, 0);
     }
   }
   const learned = estimate(boss);
-  assert.equal(learned.sampleCount, 7);
-  assert.equal(learned.manualSampleCount, 7);
-  assert.ok(learned.killSeconds > 40 && learned.killSeconds < 60);
+  assert.equal(learned.sampleCount, 0);
+  assert.equal(learned.manualSampleCount, 0);
+  assert.equal(learned.killSeconds, 0);
   const last = boss.observations.at(-1);
   boss.observations.push({ ...last, source: 'admin-repeat', cycleId: 'admin-repeat', capturedAt: new Date(Date.parse(last.capturedAt) + 60000).toISOString() });
-  assert.equal(estimate(boss).sampleCount, 7);
+  assert.equal(estimate(boss).sampleCount, 0);
   boss.observations.push({ ...last, source: 'screenshot-new', cycleId: 'verified-c7', capturedAt: new Date(Date.parse(last.capturedAt) + 120000).toISOString(), precisionSeconds: 1 });
-  assert.equal(estimate(boss).sampleCount, 7);
+  assert.equal(estimate(boss).sampleCount, 0);
   assert.equal(estimate(boss).latest.source, 'screenshot-new');
   const copy = structuredClone(boss.observations);
   bossTiming(boss, start + 100 * period);
@@ -80,17 +85,17 @@ test('이미지·관리자 이력 혼합, 동일 회차 중복 제외와 점진�
 });
 
 // 여러 회차 누락은 회차 수로 나누고 불가능한 입력 간격은 학습에서 제외합니다.
-test('관리자 기록의 누락 회차 정규화·분 오차·큰 오입력 제외', () => {
+test('남은 초 미확인·분 입력·음수 간격은 처치시간 학습 제외', () => {
   const start = Date.parse('2026-10-01T00:00:00+09:00');
   const first = { source: 'admin-1', cycleId: 'c1', capturedAt: new Date(start - 60000).toISOString(), spawnAt: new Date(start).toISOString(), precisionSeconds: 60 };
   const boss = { region: '테살리아', respawnHours: 8, observations: [first] };
   boss.observations.push({ ...first, source: 'admin-2', cycleId: 'c2', capturedAt: new Date(start + 24 * 3600000 - 60000).toISOString(), spawnAt: new Date(start + 24 * 3600000 + 60000).toISOString() });
-  assert.equal(estimate(boss).sampleCount, 1);
-  assert.ok(estimate(boss).killSeconds > 15 && estimate(boss).killSeconds < 20);
+  assert.equal(estimate(boss).sampleCount, 0);
+  assert.equal(estimate(boss).killSeconds, 0);
   boss.observations.push({ ...first, source: 'admin-wrong', cycleId: 'wrong', capturedAt: new Date(start + 25 * 3600000).toISOString(), spawnAt: new Date(start + 28 * 3600000).toISOString() });
-  assert.equal(estimate(boss).sampleCount, 1);
+  assert.equal(estimate(boss).sampleCount, 0);
   const uncertain = { region: '테살리아', respawnHours: 8, observations: [first, { ...first, source: 'admin-minus', cycleId: 'minus', spawnAt: new Date(start + 8 * 3600000 - 30000).toISOString(), capturedAt: new Date(start + 8 * 3600000 - 60000).toISOString() }] };
-  assert.equal(estimate(uncertain).sampleCount, 1);
+  assert.equal(estimate(uncertain).sampleCount, 0);
   assert.ok(estimate(uncertain).killSeconds >= 0);
 });
 
@@ -129,10 +134,9 @@ test('12:25 관측 갱신, 두 보스만 새 연속 회차 표본 추가', () =>
     assert.deepEqual(boss.observations.slice(0, -1), previousCatalog.bosses.find(item => item.id === boss.id).observations);
     if (['chrysophagos', 'amorphos'].includes(boss.id)) {
       assert.equal(learned.latest.consecutiveFrom, previous.cycleId);
-      assert.equal(learned.sampleCount, 1);
+      assert.equal(learned.sampleCount, 0);
       assert.equal(learned.interval, 8 * 3600000 + learned.killSeconds * 1000);
-      assert.ok(learned.killSeconds >= Math.min(15, boss.id === 'chrysophagos' ? 43 : 14));
-      assert.ok(learned.killSeconds <= Math.max(15, boss.id === 'chrysophagos' ? 43 : 14));
+      assert.equal(learned.killSeconds, 0);
     } else {
       assert.equal(learned.latest.cycleId, previous.cycleId);
       assert.equal(learned.sampleCount, 0);
@@ -162,11 +166,9 @@ test('13:52 관측 9마리 갱신, 알라스토르만 새 회차, 기존 연속 
       assert.equal(learned.latest.cycleId, estimate(previous).latest.cycleId);
       assert.equal(learned.latest.consecutiveFrom, estimate(previous).latest.consecutiveFrom);
     }
-    const added = { alastor: 141000, chrysophagos: 43000, amorphos: 74000 }[boss.id];
-    assert.equal(learned.sampleCount, added ? 1 : 0);
+    assert.equal(learned.sampleCount, 0);
     assert.equal(learned.interval, boss.respawnHours * 3600000 + learned.killSeconds * 1000);
-    assert.ok(learned.killSeconds >= defaultKillSeconds(boss));
-    assert.ok(learned.killSeconds <= (added ? added / 1000 : defaultKillSeconds(boss)));
+    assert.equal(learned.killSeconds, 0);
   }
   const now = Date.parse(afternoonCatalog.capturedAt);
   const preferences = { bosses: ['bedix', 'tripork'], offsets: [60, 180, 300], invasion: [] };
@@ -206,23 +208,23 @@ test('15:29:00 정각 관측 9마리, 촬영 초 확인·분 오차·두 새 회
       assert.equal(latest.cycleId, before.observations.at(-1).cycleId);
       assert.equal(latest.consecutiveFrom, before.observations.at(-1).consecutiveFrom);
     }
-    assert.equal(estimate(boss).sampleCount, estimate(before).sampleCount + Number(nextCycle));
+    assert.equal(estimate(boss).sampleCount, 0);
   }
   assert.equal(preciseCatalog.bosses.reduce((count, boss) => count + boss.observations.length, 0), 53);
 });
 
 // 초가 확인된 같은 회차의 보정은 리스폰 표본을 추가하지 않습니다.
 test('16:30:20 관측 9마리와 초 표시 3마리 보정·이력 보존', () => {
-  assert.equal(catalog.source, 'screenshot-008');
-  assert.equal(catalog.capturedAt, '2026-10-12T16:30:20+09:00');
+  assert.equal(secondsCatalog.source, 'screenshot-008');
+  assert.equal(secondsCatalog.capturedAt, '2026-10-12T16:30:20+09:00');
   const expected = { tripork: '2026-10-13T01:59:20+09:00', bedix: '2026-10-12T21:55:20+09:00', gotsis: '2026-10-12T19:16:20+09:00', alastor: '2026-10-12T21:00:20+09:00', iokantos: '2026-10-12T16:40:46+09:00', kini: '2026-10-12T16:43:42+09:00', thrason: '2026-10-12T16:57:07+09:00', chrysophagos: '2026-10-12T20:21:20+09:00', amorphos: '2026-10-12T20:23:20+09:00' };
-  for (const boss of catalog.bosses) {
+  for (const boss of secondsCatalog.bosses) {
     const previous = preciseCatalog.bosses.find(item => item.id === boss.id);
     const last = boss.observations.at(-1);
     const exact = ['iokantos', 'kini', 'thrason'].includes(boss.id);
     assert.deepEqual(boss.observations.slice(0, -1), previous.observations);
-    assert.equal(last.source, catalog.source);
-    assert.equal(last.capturedAt, catalog.capturedAt);
+    assert.equal(last.source, secondsCatalog.source);
+    assert.equal(last.capturedAt, secondsCatalog.capturedAt);
     assert.equal(last.spawnAt, expected[boss.id]);
     assert.equal(last.capturedSecondsKnown, true);
     assert.equal(last.remainingSecondsKnown, exact);
@@ -232,13 +234,52 @@ test('16:30:20 관측 9마리와 초 표시 3마리 보정·이력 보존', () =
     assert.equal(estimate(boss).sampleCount, estimate(previous).sampleCount);
     assert.ok(estimate(boss).killSeconds >= 0);
   }
-  assert.equal(catalog.bosses.reduce((sum, boss) => sum + boss.observations.length, 0), 62);
-  const boss = catalog.bosses.find(item => item.id === 'iokantos');
-  const start = Date.parse(catalog.capturedAt);
+  assert.equal(secondsCatalog.bosses.reduce((sum, boss) => sum + boss.observations.length, 0), 62);
+  const boss = secondsCatalog.bosses.find(item => item.id === 'iokantos');
+  const start = Date.parse(secondsCatalog.capturedAt);
   assert.equal(remaining(bossTiming(boss, start).at, start), '10분');
   const reopened = start + 5 * 60000;
   assert.equal(remaining(bossTiming(boss, reopened).at, reopened), '5분');
   assert.equal(bossTiming(boss, reopened).at, Date.parse(expected.iokantos));
+});
+
+// 촬영 초만 확인된 분 표시는 원본과 현재 기준만 갱신합니다.
+test('17:17:00 관측 71개 보존·세 보스 새 회차·현재 처치시간 0초', () => {
+  assert.equal(catalog.source, 'screenshot-009');
+  assert.equal(catalog.capturedAt, '2026-10-12T17:17:00+09:00');
+  const minutes = { tripork: 522, bedix: 278, gotsis: 120, alastor: 224, iokantos: 685, kini: 688, thrason: 461, chrysophagos: 184, amorphos: 187 };
+  for (const boss of catalog.bosses) {
+    const previous = secondsCatalog.bosses.find(item => item.id === boss.id);
+    const latest = boss.observations.at(-1);
+    assert.deepEqual(boss.observations.slice(0, -1), previous.observations);
+    assert.equal(latest.capturedSecondsKnown, true);
+    assert.equal(latest.remainingSecondsKnown, false);
+    assert.equal(latest.precisionSeconds, 60);
+    assert.equal(Date.parse(latest.spawnAt) - Date.parse(latest.capturedAt), minutes[boss.id] * 60000);
+    if (['iokantos', 'kini', 'thrason'].includes(boss.id)) {
+      assert.notEqual(latest.cycleId, previous.observations.at(-1).cycleId);
+      assert.equal(latest.consecutiveFrom, previous.observations.at(-1).cycleId);
+    } else assert.equal(latest.cycleId, previous.observations.at(-1).cycleId);
+    assert.equal(estimate(boss).killSeconds, 0);
+    assert.equal(estimate(boss).sampleCount, 0);
+  }
+  assert.equal(catalog.bosses.reduce((sum, boss) => sum + boss.observations.length, 0), 71);
+});
+
+// 거친 재촬영이 앞선 정확한 학습 기준을 덮어쓰지 않게 합니다.
+test('남은 초가 확인된 연속 회차만 학습하고 분 입력은 현재 기준에만 반영', () => {
+  const at = Date.parse('2026-10-12T16:40:46+09:00');
+  const exact = { capturedSecondsKnown: true, remainingSecondsKnown: true, precisionSeconds: 1 };
+  const boss = { respawnHours: 12, observations: [
+    { ...exact, source: 'screenshot-a', cycleId: 'a', spawnAt: new Date(at).toISOString() },
+    { source: 'screenshot-a-coarse', cycleId: 'a', spawnAt: new Date(at + 59000).toISOString() },
+    { ...exact, source: 'screenshot-b', cycleId: 'b', consecutiveFrom: 'a', spawnAt: new Date(at + 12 * 3600000 + 15000).toISOString() }
+  ] };
+  assert.equal(estimate(boss).killSeconds, 15);
+  assert.equal(estimate(boss).sampleCount, 1);
+  boss.observations.push({ source: 'admin-minutes', cycleId: 'b', spawnAt: new Date(at + 12 * 3600000 + 60000).toISOString(), precisionSeconds: 60 });
+  assert.equal(estimate(boss).killSeconds, 15);
+  assert.equal(estimate(boss).latest.source, 'admin-minutes');
 });
 
 // 처치시간은 임의 상한 없이 누적 보정하고 기본 리스폰 자체는 유지합니다.
@@ -246,12 +287,12 @@ test('고정 리스폰 유지와 처치시간 상한 없는 누적 보정', () =
   const at = Date.parse('2026-10-12T00:00:00+09:00');
   for (const [precision, delay] of [[1, 120], [60, 120], [120, 120], [1, 900]]) {
     const boss = { region: '자하브', respawnHours: 8, observations: [
-      { source: 'screenshot-1', cycleId: 'a', capturedAt: new Date(at - 60000).toISOString(), spawnAt: new Date(at).toISOString(), precisionSeconds: precision },
-      { source: 'screenshot-2', cycleId: 'b', consecutiveFrom: 'a', capturedAt: new Date(at + 8 * 3600000).toISOString(), spawnAt: new Date(at + 8 * 3600000 + delay * 1000).toISOString(), precisionSeconds: precision }
+      { source: 'screenshot-1', cycleId: 'a', capturedAt: new Date(at - 60000).toISOString(), spawnAt: new Date(at).toISOString(), capturedSecondsKnown: true, remainingSecondsKnown: precision === 1, precisionSeconds: precision },
+      { source: 'screenshot-2', cycleId: 'b', consecutiveFrom: 'a', capturedAt: new Date(at + 8 * 3600000).toISOString(), spawnAt: new Date(at + 8 * 3600000 + delay * 1000).toISOString(), capturedSecondsKnown: true, remainingSecondsKnown: precision === 1, precisionSeconds: precision }
     ] };
-    assert.ok(estimate(boss).killSeconds > 30 && estimate(boss).killSeconds < delay);
+    assert.equal(estimate(boss).killSeconds, precision === 1 ? delay : 0);
     assert.equal(estimate(boss).interval, 8 * 3600000 + estimate(boss).killSeconds * 1000);
-    assert.equal(estimate(boss).sampleCount, 1);
+    assert.equal(estimate(boss).sampleCount, precision === 1 ? 1 : 0);
   }
 });
 
@@ -313,14 +354,15 @@ test('분 단위 남은 시간, 시·분 경계, 기기 시각 변경과 만료'
 test('최근 최대 10개 연속 간격의 중앙값만 사용', () => {
   const start = Date.parse('2026-10-01T00:00:00+09:00');
   let at = start;
-  const observations = [{ cycleId: 'c0', spawnAt: new Date(at).toISOString() }];
+  const precise = { capturedSecondsKnown: true, remainingSecondsKnown: true, precisionSeconds: 1 };
+  const observations = [{ ...precise, cycleId: 'c0', spawnAt: new Date(at).toISOString() }];
   for (let i = 1; i <= 12; i++) {
     at += 8 * 3600000 + i * 1000;
-    observations.push({ cycleId: `c${i}`, consecutiveFrom: `c${i - 1}`, spawnAt: new Date(at).toISOString() });
+    observations.push({ ...precise, cycleId: `c${i}`, consecutiveFrom: `c${i - 1}`, spawnAt: new Date(at).toISOString() });
   }
   const boss = { respawnHours: 8, observations };
   assert.equal(estimate(boss).sampleCount, 10);
-  assert.equal(estimate(boss).interval, 8 * 3600000 + 7500 * 10 / 13);
+  assert.equal(estimate(boss).interval, 8 * 3600000 + 7500);
   observations.push({ cycleId: 'missed', spawnAt: new Date(at + 16 * 3600000).toISOString() });
   assert.equal(estimate(boss).sampleCount, 10);
   observations.push({ cycleId: 'short', consecutiveFrom: 'missed', spawnAt: new Date(at + 17 * 3600000).toISOString() });

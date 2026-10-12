@@ -25,6 +25,46 @@ function app(initial = {}) {
   return { context, storage, elements, run: code => runInContext(code, context) };
 }
 
+// 기존 구독이 있어도 앱 알림 권한을 확인하고 거절 시 서버에 연결하지 않습니다.
+test('푸시 연결은 기존 구독에도 알림 권한 확인·거절 후 저장 차단', async () => {
+  for (const permission of ['granted', 'denied']) {
+    const ui = app();
+    let asked = 0, writes = 0;
+    ui.context.Notification = { permission: 'default', requestPermission: async () => { asked++; return permission; } };
+    ui.context.window.Notification = ui.context.Notification;
+    ui.context.window.PushManager = {};
+    ui.context.navigator.serviceWorker = {};
+    ui.context.navigator.userAgent = 'Android';
+    ui.context.fetch = async () => { writes++; return Response.json({ ok: true }); };
+    ui.run("registration={}; config={ready:true}; subscription={toJSON:()=>({endpoint:'test'})};");
+    await ui.run('connect()');
+    assert.equal(asked, 1);
+    assert.equal(writes, permission === 'granted' ? 1 : 0);
+    assert.equal(ui.run('connected'), permission === 'granted');
+  }
+});
+
+// 화면을 벗어나면 주기 작업을 제거하고 복귀할 때 한 번씩만 재개합니다.
+test('백그라운드 타이머 중지·복귀 재계산·중복 실행 방지', () => {
+  const ui = app();
+  const timers = new Map();
+  let sequence = 0, ticks = 0;
+  ui.context.setInterval = (callback, delay) => { const id = ++sequence; timers.set(id, { callback, delay }); return id; };
+  ui.context.clearInterval = id => timers.delete(id);
+  ui.context.onTick = () => ticks++;
+  ui.run('tick=onTick; startForegroundUpdates()');
+  assert.equal(ticks, 1);
+  assert.deepEqual([...timers.values()].map(item => item.delay), [1000, 15000]);
+  ui.context.document.hidden = true;
+  ui.run('stopForegroundUpdates(); startForegroundUpdates()');
+  assert.equal(timers.size, 0);
+  assert.equal(ticks, 1);
+  ui.context.document.hidden = false;
+  ui.run('startForegroundUpdates(); startForegroundUpdates()');
+  assert.equal(timers.size, 2);
+  assert.equal(ticks, 3);
+});
+
 // 초기 자료가 늦어도 저장된 선택을 기본값으로 덮어쓰지 않습니다.
 test('초기 자료 복원 전 환경설정 차단과 기존 개인 선택 유지', () => {
   const preferences = { enabled: false, bosses: ['bedix'], offsets: [180], invasion: [18] };

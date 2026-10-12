@@ -21,18 +21,14 @@ export function normalizePreferences(value, bossIds) {
   };
 }
 
-// 지역별 출현 후 기본 처치시간을 반환합니다.
-export function defaultKillSeconds(boss) {
-  return ({ 테살리아: 15, 자하브: 30 })[boss.region] || 0;
-}
-
-// 이미지와 관리자 기록을 회차별로 묶고 최신 보정값을 유지합니다.
+// 촬영 시각과 남은 초가 확인된 기록만 처치시간 학습 회차로 묶습니다.
 function learningCycles(boss) {
   const cycles = new Map();
-  for (const observation of boss.observations.filter(item => !item.source?.startsWith('admin-'))) {
+  const observations = boss.observations.filter(item => item.capturedSecondsKnown && item.remainingSecondsKnown && item.precisionSeconds === 1);
+  for (const observation of observations.filter(item => !item.source?.startsWith('admin-'))) {
     cycles.set(observation.cycleId, { ...observation, manual: false });
   }
-  for (const observation of boss.observations.filter(item => item.source?.startsWith('admin-'))) {
+  for (const observation of observations.filter(item => item.source?.startsWith('admin-'))) {
     const closest = [...cycles.values()].sort((a, b) => Math.abs(Date.parse(a.spawnAt) - Date.parse(observation.spawnAt)) - Math.abs(Date.parse(b.spawnAt) - Date.parse(observation.spawnAt)))[0];
     const tolerance = Math.max(180, (closest?.precisionSeconds || 0) + (observation.precisionSeconds || 60)) * 1000;
     if (closest && Math.abs(Date.parse(closest.spawnAt) - Date.parse(observation.spawnAt)) <= tolerance) {
@@ -44,11 +40,10 @@ function learningCycles(boss) {
   return [...cycles.values()].sort((a, b) => Date.parse(a.spawnAt) - Date.parse(b.spawnAt));
 }
 
-// 회차 간격과 입력 정밀도로 기본 처치시간을 보스별로 보정합니다.
+// 실제 회차 간격과 입력 정밀도로 처치시간을 보스별로 보정합니다.
 export function estimate(boss) {
   const samples = learningCycles(boss);
   const base = boss.respawnHours * 3600000;
-  const fallback = defaultKillSeconds(boss);
   const intervals = [];
   for (let i = 1; i < samples.length; i++) {
     const after = samples[i];
@@ -57,7 +52,7 @@ export function estimate(boss) {
     const confirmed = after.consecutiveFrom === before.cycleId;
     const manual = before.manual || after.manual;
     if (!confirmed && !manual) continue;
-    const count = confirmed ? 1 : Math.round(delta / (base + fallback * 1000));
+    const count = confirmed ? 1 : Math.round(delta / base);
     if (count < 1 || count > 30) continue;
     const uncertainty = ((before.precisionSeconds || 0) + (after.precisionSeconds || 0)) / count;
     const delay = (delta / count - base) / 1000;
@@ -66,7 +61,7 @@ export function estimate(boss) {
   }
   const recent = intervals.slice(-10).sort((a, b) => a.delay - b.delay);
   const weight = recent.reduce((sum, item) => sum + item.weight, 0);
-  let cumulative = 0, median = fallback;
+  let cumulative = 0, median = 0;
   for (const [index, item] of recent.entries()) {
     cumulative += item.weight;
     if (cumulative >= weight / 2) {
@@ -74,8 +69,8 @@ export function estimate(boss) {
       break;
     }
   }
-  const killSeconds = (3 * fallback + weight * median) / (3 + weight);
-  return { latest: boss.observations.at(-1), interval: base + killSeconds * 1000, killSeconds, defaultKillSeconds: fallback, sampleCount: recent.length, manualSampleCount: recent.filter(item => item.manual).length };
+  const killSeconds = median;
+  return { latest: boss.observations.at(-1), interval: base + killSeconds * 1000, killSeconds, sampleCount: recent.length, manualSampleCount: recent.filter(item => item.manual).length };
 }
 
 // 예정 시각이 지나면 처치된 것으로 가정하고 현재 이후 회차를 계산합니다.

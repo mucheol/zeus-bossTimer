@@ -40,18 +40,17 @@
         <p id="admin-hint" class="admin-hint" hidden>관리자 모드 · 보스를 누르면 전체 이용자의 시간을 수정합니다.</p>
         <div id="boss-list" class="boss-grid" aria-label="보스 목록"><p class="loading">시간표를 불러오고 있습니다.</p></div>
       </section>
-      <aside class="notice"><span>ⓘ</span><p>기본 처치시간은 <strong>테살리아 15초 · 자하브 30초</strong>입니다. 이미지 관측과 관리자 수정 이력으로 보정하며, 예정 시각이 지나면 다음 리스폰을 계산합니다.</p></aside>
       <button id="connect-banner" class="connect-banner"><span class="connect-icon">♧</span><span><strong>화면을 닫아도 보스 알림</strong><small>홈 화면에 추가하고 알림을 연결하세요.</small></span><span aria-hidden="true">↗</span></button>
     </main>
     <footer><span>ZEUS BOSS TIMER</span><span>모든 시간은 한국시간 · KST</span></footer>
   </div>
   <dialog id="settings">
     <div class="dialog-heading"><h2>환경설정</h2><button id="settings-close" class="icon-button" aria-label="설정 닫기">×</button></div>
-    <div class="master-setting"><div><h3>전체 알림</h3><p class="small-note">꺼도 보스별 선택은 유지됩니다.</p></div><button id="alerts-enabled" class="toggle-button" role="switch" aria-checked="true">켜짐</button></div>
+    <div class="master-setting"><div><h3>어플 알림</h3></div><button id="alerts-enabled" class="toggle-button" role="switch" aria-checked="true">켜짐</button></div>
     <div id="push-status" class="push-status" role="status">알림 연결을 확인하고 있습니다.</div>
     <p class="settings-copy">앱을 닫거나 화면을 잠가도 시스템 알림을 받습니다. 소리와 진동은 휴대폰의 알림 설정을 따릅니다.</p>
-    <div class="push-actions"><button id="connect" class="primary">푸시 알림 허용 · 연결</button><button id="test-push" class="secondary" disabled>10초 뒤 테스트</button><button id="device-notifications" class="secondary">기기 알림 설정 안내</button><button id="check-permission" class="text-button">권한 다시 확인</button><button id="disconnect" class="text-button" hidden>연결 해제</button></div>
-    <p class="small-note">권한 허용·연결·테스트·연결 해제는 즉시 실행됩니다. 아래 선택과 전체 알림은 저장 후 적용됩니다.</p>
+    <div class="push-actions"><button id="connect" class="primary">푸시 알림 허용 · 연결</button><button id="test-push" class="secondary" disabled>3초 뒤 테스트</button><button id="device-notifications" class="secondary">기기 알림 설정 안내</button><button id="check-permission" class="text-button">권한 다시 확인</button><button id="disconnect" class="text-button" hidden>연결 해제</button></div>
+    <p class="small-note">권한 허용·연결·테스트·연결 해제는 즉시 실행됩니다. 아래 선택과 어플 알림은 저장 후 적용됩니다.</p>
     <div id="device-guide" class="install-guide" hidden></div>
     <hr>
     <h3>필드 보스 알림 시점</h3><p class="small-note">여러 개 선택 가능 · 기본 5분 전</p>

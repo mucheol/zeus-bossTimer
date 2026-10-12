@@ -33,6 +33,8 @@ let pushKnown = !saved.token;
 let catalogRequest = 0;
 let adminWriting = false;
 let historyBefore;
+let clockTimer;
+let refreshTimer;
 
 // 손상되거나 사용이 차단된 기기 저장소를 안전하게 읽습니다.
 function readStorage() {
@@ -94,7 +96,7 @@ function renderBosses() {
 
 // 카운트다운과 한국시간 침공의 다음 일정을 갱신합니다.
 function tick() {
-  if (!catalog) return;
+  if (!catalog || document.hidden) return;
   const now = Date.now();
   if (!editing && sort.startsWith('time-')) {
     const list = $('#boss-list');
@@ -121,6 +123,28 @@ function tick() {
   }
 }
 
+// 화면이 보이지 않을 때 주기적인 화면 계산과 서버 조회를 중지합니다.
+function stopForegroundUpdates() {
+  clearInterval(clockTimer);
+  clearInterval(refreshTimer);
+  clockTimer = undefined;
+  refreshTimer = undefined;
+}
+
+// 열린 화면에서만 타이머를 실행하고 복귀 즉시 실제 현재 시각을 반영합니다.
+function startForegroundUpdates() {
+  stopForegroundUpdates();
+  if (document.hidden) return;
+  tick();
+  clockTimer = setInterval(tick, 1000);
+  refreshTimer = setInterval(() => {
+    if (document.hidden) return;
+    void refresh();
+    if (!config || !pushKnown || (!connected && pending && saved.token)) void initializePush();
+    else void syncPreferences();
+  }, 15000);
+}
+
 // 알림 토글과 실제 서버 저장 상태를 함께 표시합니다.
 function renderSettings() {
   for (const button of $('#settings').querySelectorAll('button')) button.disabled = settingsSaving;
@@ -131,18 +155,19 @@ function renderSettings() {
     button.querySelector('span').textContent = enabled ? preferences.enabled ? '알림 켜짐' : '선택 · 중지' : '알림 꺼짐';
     button.setAttribute('aria-label', `${button.dataset.hour}시 침공 알림`);
   }
-  $('#test-push').disabled = settingsSaving || pushBusy || !connected || !preferences.enabled;
+  const permitted = globalThis.Notification?.permission === 'granted';
+  $('#test-push').disabled = settingsSaving || pushBusy || !connected || !subscription || !permitted || !preferences.enabled;
   $('#connect').disabled = settingsSaving || pushBusy;
   $('#disconnect').disabled = settingsSaving || pushBusy;
   $('#check-permission').disabled = settingsSaving || pushBusy || checkingPush;
   $('#settings-save').disabled = settingsSaving || pushBusy || !catalog;
   $('#disconnect').hidden = !subscription && !connected;
-  $('#connect').hidden = connected && Boolean(subscription);
+  $('#connect').hidden = connected && Boolean(subscription) && permitted;
   const unconfirmed = pending && Boolean(saved.token);
   $('#sync-status').textContent = !pushKnown || unconfirmed ? '서버 적용 확인 대기 · 기존 알림이 도착할 수 있습니다. 연결되면 다시 시도합니다.' : connected ? '이 기기의 알림 선택이 서버에 저장됐습니다.' : '선택은 이 기기에 저장됩니다. 알림 연결 후 적용됩니다.';
-  const title = !preferences.enabled ? unconfirmed || !pushKnown ? '전체 알림 끄기 · 서버 확인 대기' : '전체 알림 꺼짐' : connected ? '이 기기 알림 연결됨' : '화면을 닫아도 보스 알림';
+  const title = !preferences.enabled ? unconfirmed || !pushKnown ? '어플 알림 끄기 · 서버 확인 대기' : '어플 알림 꺼짐' : connected && permitted && subscription ? '이 기기 알림 연결됨' : '화면을 닫아도 보스 알림';
   $('#connect-banner strong').textContent = title;
-  $('#connect-banner small').textContent = !preferences.enabled ? (unconfirmed || !pushKnown ? '서버 저장 대기 · 아직 알림이 도착할 수 있습니다.' : '환경설정에서 다시 켜세요. 개별 선택은 유지됩니다.') : connected ? (pending ? '변경사항이 아직 서버에 저장되지 않았습니다.' : '필드 보스와 침공 시간을 선택해 주세요.') : '홈 화면에 추가하고 알림을 연결하세요.';
+  $('#connect-banner small').textContent = !preferences.enabled ? (unconfirmed || !pushKnown ? '서버 저장 대기 · 아직 알림이 도착할 수 있습니다.' : '환경설정에서 다시 켜세요.') : connected && permitted && subscription ? (pending ? '변경사항이 아직 서버에 저장되지 않았습니다.' : '필드 보스와 침공 시간을 선택해 주세요.') : '환경설정에서 알림 권한과 연결을 확인하세요.';
   renderSettingsDraft();
 }
 
@@ -267,6 +292,7 @@ async function connect() {
   pushBusy = true;
   renderSettings();
   try {
+    if (await Notification.requestPermission() !== 'granted') throw new Error('휴대폰 설정에서 이 앱의 알림을 허용해 주세요.');
     if (!saved.token) saved.token = [...crypto.getRandomValues(new Uint8Array(32))].map(byte => byte.toString(16).padStart(2, '0')).join('');
     persist();
     if (!storageAvailable) throw new Error('알림 연결을 유지하려면 기기 저장소를 허용해 주세요.');
@@ -425,7 +451,7 @@ async function saveSettings() {
     settingsDraft = null;
     $('#settings').close();
     renderBosses();
-    toast(pending && saved.token ? '기기에 저장됨 · 서버 적용 대기 중이며 기존 알림이 도착할 수 있습니다.' : !preferences.enabled ? '전체 알림을 껐습니다. 개별 선택은 유지됩니다.' : connected ? '알림 설정을 저장했습니다.' : '기기에 저장했습니다. 푸시 알림을 연결해 주세요.');
+    toast(pending && saved.token ? '기기에 저장됨 · 서버 적용 대기 중이며 기존 알림이 도착할 수 있습니다.' : !preferences.enabled ? '어플 알림을 껐습니다.' : connected ? '알림 설정을 저장했습니다.' : '기기에 저장했습니다. 푸시 알림을 연결해 주세요.');
   } catch (error) { settingsMessage = `저장 실패: ${error.message}`; } finally {
     settingsSaving = false;
     renderSettings();
@@ -682,7 +708,7 @@ $('#disconnect').addEventListener('click', disconnect);
 $('#test-push').addEventListener('click', async () => {
   if (!connected || !preferences.enabled || settingsSaving || pushBusy) return;
   $('#test-push').disabled = true;
-  try { await api('/api/test'); toast('10초 뒤 발송합니다. 화면을 잠가 확인해 보세요.'); } catch (error) { toast(error.message); }
+  try { await api('/api/test'); toast('3초 뒤 발송을 요청했습니다. 홈 화면으로 나가거나 화면을 잠가 확인하세요.'); } catch (error) { toast(error.message); }
   setTimeout(renderSettings, 3000);
 });
 $('#invasion-buttons').addEventListener('click', event => {
@@ -732,14 +758,20 @@ window.addEventListener('beforeinstallprompt', event => { event.preventDefault()
 $('#install').addEventListener('click', async () => { await installPrompt?.prompt(); installPrompt = null; $('#install').hidden = true; });
 navigator.serviceWorker?.addEventListener('message', event => { if (event.data?.type === 'UPDATED') $('#update-banner').hidden = false; });
 $('#apply-update').addEventListener('click', () => location.reload());
-document.addEventListener('visibilitychange', () => { if (!document.hidden) { tick(); void refresh(); void initializePush(); void registration?.update(); } });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { stopForegroundUpdates(); return; }
+  startForegroundUpdates();
+  void refresh();
+  void initializePush();
+  void registration?.update();
+});
 window.addEventListener('focus', tick);
-window.addEventListener('pageshow', tick);
+window.addEventListener('pageshow', startForegroundUpdates);
+window.addEventListener('pagehide', stopForegroundUpdates);
 window.addEventListener('online', () => { void refresh(); void initializePush(); });
 window.addEventListener('offline', () => { $('#network').textContent = '오프라인 자료'; });
 // 자료 요청과 별개로 기기 시각에 맞춰 화면을 계속 갱신합니다.
-setInterval(tick, 1000);
-setInterval(() => { if (!document.hidden) { void refresh(); if (!config || !pushKnown || (!connected && pending && saved.token)) void initializePush(); else void syncPreferences(); } }, 15000);
+startForegroundUpdates();
 void restoreCatalog();
 void refresh().then(initializePush);
 void restoreAdmin();

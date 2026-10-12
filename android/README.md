@@ -14,4 +14,6 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell am start -n com.mucheol.zeus.preview/com.google.androidbrowserhelper.trusted.LauncherActivity
 ```
 
-이 APK는 테스트 서명이며 스토어 제출·배포용 서명 관리는 포함하지 않습니다. 푸시는 Chrome의 웹 알림 권한과 기기 설정을 따릅니다. 네이티브 알림 전달 서비스는 별도로 추가하지 않았습니다.
+표시 이름은 **제우스**, 현재 versionCode는 2입니다. Android 13 이상 알림 권한과 Android Browser Helper의 알림 위임 서비스·권한 요청 화면을 포함합니다. Chrome 웹 알림은 앱의 알림 채널로 전달하며 소리·진동은 기기 설정을 따릅니다. 기존 APK는 같은 서명으로 한 번 업데이트 설치해야 이 변경을 사용할 수 있습니다. 알림 위임은 Chrome이 필요할 때 호출하며 상시 실행 서비스는 추가하지 않습니다.
+
+이 APK는 프로젝트 전용 테스트 서명이며 스토어 제출·배포용 서명 관리는 포함하지 않습니다. Android·iPhone 실기기의 수신과 배터리 사용량은 별도 확인이 필요합니다. 웹 화면·보스 시간의 후속 수정은 웹 배포만으로 반영됩니다.

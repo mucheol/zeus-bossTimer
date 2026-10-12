@@ -81,14 +81,14 @@ async function api(request, env) {
   }
   if (url.pathname === '/api/test' && request.method === 'POST') {
     const device = await env.DB.prepare('SELECT preferences FROM devices WHERE id=?').bind(id).first();
-    if (device && !normalizePreferences(JSON.parse(device.preferences)).enabled) return json({ error: '전체 알림을 켜고 저장한 뒤 테스트해 주세요.' }, 409);
+    if (device && !normalizePreferences(JSON.parse(device.preferences)).enabled) return json({ error: '어플 알림을 켜고 저장한 뒤 테스트해 주세요.' }, 409);
     const now = Date.now();
     const allowed = await env.DB.prepare('UPDATE devices SET test_at=? WHERE id=? AND test_at<? RETURNING id').bind(now, id, now - 60000).first();
     if (!allowed) return json({ error: '알림을 연결한 뒤 테스트해 주세요. 테스트는 1분마다 가능합니다.' }, 429);
     const key = `${id}:test:${crypto.randomUUID()}`;
     await env.DB.prepare('INSERT INTO jobs(id,device_id,due_at,expires_at,payload,state,lease_until) VALUES (?,?,?,?,?,\'queued\',?)')
-      .bind(key, id, now + 10000, now + 130000, JSON.stringify({ title: '제우스 타이머 · 테스트', body: '알림 연결 성공! 소리·진동은 기기 설정을 따릅니다.', tag: 'zeus-test', expiresAt: now + 130000, url: '/' }), now + 120000).run();
-    await enqueue(env, [{ id: key }], () => env.PUSH_QUEUE.send({ id: key }, { delaySeconds: 10 }));
+      .bind(key, id, now + 3000, now + 123000, JSON.stringify({ title: '제우스 타이머 · 테스트', body: '알림 연결 성공! 소리·진동은 기기 설정을 따릅니다.', tag: 'zeus-test', expiresAt: now + 123000, url: '/' }), now + 120000).run();
+    await enqueue(env, [{ id: key }], () => env.PUSH_QUEUE.send({ id: key }, { delaySeconds: 3 }));
     return json({ ok: true });
   }
   return json({ error: '요청 경로를 찾을 수 없습니다.' }, 404);
@@ -146,7 +146,7 @@ export async function deliver(env, id, now = Date.now(), send = fetch) {
   let providerStatus = 0;
   try {
     const subscription = JSON.parse(device.subscription);
-    const options = await buildPushPayload({ data: job.payload, options: { ttl: Math.max(1, Math.floor((job.expires_at - now) / 1000)) } }, subscription, {
+    const options = await buildPushPayload({ data: job.payload, options: { ttl: Math.max(1, Math.floor((job.expires_at - now) / 1000)), urgency: 'high' } }, subscription, {
       subject: env.VAPID_SUBJECT, publicKey: env.VAPID_PUBLIC_KEY, privateKey: env.VAPID_PRIVATE_KEY
     });
     stage = 'request';

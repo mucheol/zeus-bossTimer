@@ -1,13 +1,27 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
   <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
   <application
     android:allowBackup="false"
     android:icon="@drawable/app_icon"
-    android:label="제우스 (테스트)"
+    android:label="제우스"
     android:manageSpaceActivity="com.google.androidbrowserhelper.trusted.ManageDataLauncherActivity"
     android:supportsRtl="true"
     android:theme="@android:style/Theme.Translucent.NoTitleBar">
     <meta-data android:name="asset_statements" android:resource="@string/asset_statements" />
+    <activity
+      android:name="com.google.androidbrowserhelper.trusted.NotificationPermissionRequestActivity"
+      android:exported="false"
+      android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+    <service
+      android:name="com.google.androidbrowserhelper.trusted.DelegationService"
+      android:exported="true">
+      <meta-data android:name="androidx.browser.trusted.USE_HIGH_PRI_NOTIFICATIONS" android:value="true" />
+      <intent-filter>
+        <action android:name="android.support.customtabs.trusted.TRUSTED_WEB_ACTIVITY_SERVICE" />
+        <category android:name="android.intent.category.DEFAULT" />
+      </intent-filter>
+    </service>
     <activity
       android:name="com.google.androidbrowserhelper.trusted.ManageDataLauncherActivity"
       android:exported="false">

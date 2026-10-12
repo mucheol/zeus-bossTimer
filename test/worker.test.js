@@ -5,7 +5,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import worker, { schedule, deliver } from '../src/worker.js';
 import { validateSubscription } from '../src/validation.js';
 import catalog from '../public/data/catalog.json' with { type: 'json' };
-import { estimate } from '../public/lib/engine.js';
+import { estimate, plannedEvents } from '../public/lib/engine.js';
 
 // 실제 암호화가 가능한 브라우저 구독키와 VAPID 키를 만듭니다.
 async function environment(context) {
@@ -34,6 +34,29 @@ async function environment(context) {
 function request(path, method = 'POST', body, token = 'a'.repeat(64)) {
   return new Request(`https://timer.example${path}`, { method, headers: { Origin: 'https://timer.example', Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}) });
 }
+
+// 화면이 사라져도 서버 큐가 3초 뒤 테스트 알림을 보내도록 예약합니다.
+test('3초 테스트는 서버 큐로 예약하고 앱 요청 없이 암호화 발송', async context => {
+  const env = await environment(context);
+  await worker.fetch(request('/api/subscription', 'PUT', { subscription: env.subscription, preferences: { enabled: true, bosses: [], offsets: [300], invasion: [] } }), env);
+  let delay;
+  env.PUSH_QUEUE.send = async (body, options) => { env.messages.push(body); delay = options.delaySeconds; };
+  const now = Date.now();
+  assert.equal((await worker.fetch(request('/api/test'), env)).status, 200);
+  const job = await env.DB.prepare("SELECT * FROM jobs WHERE state='queued'").first();
+  assert.equal(job.due_at, now + 3000);
+  assert.equal(job.expires_at, job.due_at + 120000);
+  assert.equal(delay, 3);
+  assert.equal(env.messages[0].id, job.id);
+  let sends = 0;
+  await deliver(env, job.id, job.due_at, async (_, options) => {
+    sends++;
+    assert.equal(new Headers(options.headers).get('Urgency'), 'high');
+    return new Response(null, { status: 201 });
+  });
+  assert.equal(sends, 1);
+  assert.equal((await env.DB.prepare('SELECT state FROM jobs WHERE id=?').bind(job.id).first()).state, 'sent');
+});
 
 // 선택 취소 시 모든 대기 예약을 막고 구독 해제 시 개인 푸시 정보를 제거합니다.
 test('구독 저장·침공 취소·해제, 다른 토큰의 기존 주소 탈취 방지', async context => {
@@ -95,7 +118,7 @@ test('전체 보스·모든 시점의 5기기 반복 예약은 50쿼리 이내',
   await schedule(env, Date.now());
   assert.ok(queries <= 50, `쿼리 수 ${queries}`);
   assert.equal((await database.prepare("SELECT COUNT(*) AS count FROM devices WHERE revision='old'").first()).count, 0);
-  assert.ok((await database.prepare("SELECT COUNT(*) AS count FROM jobs WHERE state='pending'").first()).count > 1000);
+  assert.equal((await database.prepare("SELECT COUNT(*) AS count FROM jobs WHERE state='pending'").first()).count, 5 * plannedEvents(catalog, preferences, Date.now()).length);
 });
 
 // 외부 사이트 요청·잘못된 보스·임의 주소·큰 본문을 거절합니다.
@@ -126,6 +149,7 @@ test('정각 예약 큐 발송, aes128gcm 암호화, 중복 실행 방지', asyn
     sends++;
     assert.equal(url, env.subscription.endpoint);
     assert.equal(new Headers(options.headers).get('Content-Encoding'), 'aes128gcm');
+    assert.equal(new Headers(options.headers).get('Urgency'), 'high');
     assert.ok(new Headers(options.headers).get('Authorization').startsWith('vapid '));
     assert.ok(options.body);
     assert.equal(options.redirect, 'manual');
@@ -188,8 +212,8 @@ test('자료 보정 후 예약 갱신과 발송 이력 보존', async context =>
   }
 });
 
-// 최신 수정만 적용하던 기존 이력도 모두 읽어 학습하고 원본을 보존합니다.
-test('과거 관리자 이력 전체 보존·조회와 이미지 이후 보정 학습', async context => {
+// 관리자 분 입력은 원본과 현재 기준으로 보존하며 처치시간으로 학습하지 않습니다.
+test('과거 관리자 이력 전체 보존·조회와 분 입력의 처치시간 학습 제외', async context => {
   const env = await environment(context);
   const boss = catalog.bosses.find(item => item.id === 'bedix');
   const start = Date.parse(boss.observations.at(-1).spawnAt);
@@ -201,15 +225,15 @@ test('과거 관리자 이력 전체 보존·조회와 이미지 이후 보정 �
   const merged = shared.bosses.find(item => item.id === boss.id);
   assert.equal(merged.observations.length, boss.observations.length + 3);
   assert.deepEqual(merged.observations.slice(0, boss.observations.length), boss.observations);
-  assert.equal(estimate(merged).manualSampleCount, 3);
-  assert.ok(estimate(merged).killSeconds > 30 && estimate(merged).killSeconds < 45);
+  assert.equal(estimate(merged).manualSampleCount, 0);
+  assert.equal(estimate(merged).killSeconds, 0);
   assert.equal((await env.DB.prepare('SELECT COUNT(*) AS count FROM boss_updates').first()).count, 3);
 });
 
 // 인증·공통 저장·다른 기기 조회와 수정 후 예약 교체를 실제 D1에서 검사합니다.
 test('관리자 인증 후 공통 시간 저장, 전체 기기 공유, 초 제거와 예약 교체', async context => {
   const env = await environment(context);
-  const now = Date.parse('2026-10-12T17:10:37.500+09:00');
+  const now = Date.parse('2026-10-12T18:10:37.500+09:00');
   context.mock.method(Date, 'now', () => now);
   const preferences = { bosses: ['bedix'], offsets: [60], invasion: [] };
   await worker.fetch(request('/api/subscription', 'PUT', { subscription: env.subscription, preferences }), env);
@@ -293,7 +317,7 @@ test('큐 생산자 장애 즉시 재시도와 다음 분 예약 회수', async 
 // 개인 알림은 서로 독립이며 공통 수정·취소만 모든 기기에 보입니다.
 test('두 기기 개인 설정 격리, 관리자 이력·연속 되돌리기·동시 수정 방어', async context => {
   const env = await environment(context);
-  let now = Date.parse('2026-10-12T17:00:00+09:00');
+  let now = Date.parse('2026-10-12T18:00:00+09:00');
   context.mock.method(Date, 'now', () => now);
   const first = { enabled: true, bosses: ['bedix'], offsets: [60], invasion: [0] };
   const second = { enabled: false, bosses: ['tripork'], offsets: [300], invasion: [18] };
