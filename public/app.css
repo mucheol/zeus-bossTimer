@@ -30,6 +30,7 @@ h2{font-size:14px;margin:0;font-weight:650;letter-spacing:-.3px}.section-icon{co
 .invasion-buttons button[aria-pressed=true] span{color:#e2cf9e}
 .invasion-note{font-size:10px;color:var(--muted);margin:6px 0 0;text-align:center}
 .boss-heading{margin:15px 0 5px}.boss-heading h2 span{color:var(--muted);margin-left:6px;font-size:11px;font-weight:400}
+.boss-heading{flex-wrap:wrap}.sort-controls{display:flex;align-items:center;gap:4px;margin-left:auto}#boss-sort{font:inherit;font-size:11px;max-width:140px;min-height:38px;padding:5px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--text)}#boss-sort:focus-visible{outline:2px solid var(--mint);outline-offset:3px}
 .boss-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .boss-card{position:relative;border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:9px;min-width:0;overflow:hidden}
 .boss-card[data-alert-enabled=true]{border-color:#94d5b2;background:#203329;box-shadow:inset 0 0 0 1px #94d5b240}
@@ -49,6 +50,7 @@ h2{font-size:14px;margin:0;font-weight:650;letter-spacing:-.3px}.section-icon{co
 .boss-alert svg{height:16px;width:16px;stroke:currentColor;stroke-width:1.7;fill:none;stroke-linecap:round;stroke-linejoin:round}
 .boss-alert[aria-pressed=true]{background:var(--mint);color:#14261c;border-color:#c6f1d9;font-weight:750}
 .move-buttons{display:flex;gap:8px;margin-top:8px}.move-buttons button{border:1px solid var(--line);border-radius:6px;flex:1;min-height:38px}
+.move-buttons .drag-handle{touch-action:none;cursor:grab;color:var(--mint);font-size:22px;user-select:none;-webkit-user-select:none}.boss-card.drag-source{opacity:.35;border-style:dashed;border-color:var(--mint)}.drag-ghost{position:fixed;z-index:20;pointer-events:none;opacity:.95;box-shadow:0 8px 30px #0009;transform:rotate(2deg)}body.dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}body.dragging .drag-handle{cursor:grabbing}
 .order-actions{font-size:10px;color:var(--muted);margin-bottom:10px;align-items:center;justify-content:space-between}.order-actions:not([hidden]){display:flex}
 .notice{display:flex;align-items:flex-start;gap:9px;color:var(--muted);margin:19px 0;font-size:10px;line-height:1.75}.notice p{margin:0}.notice>span{color:var(--gold);font-size:14px}.notice strong{font-weight:500;color:#c0c8bc}
 .connect-banner{display:flex;width:100%;align-items:center;text-align:left;padding:15px 14px;border:1px solid #425147;border-radius:12px;gap:12px;background:#1c2a22}

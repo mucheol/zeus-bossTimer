@@ -97,9 +97,21 @@ export function plannedEvents(catalog, preferences, now) {
   return events.sort((a, b) => a.dueAt - b.dueAt);
 }
 
-// 저장된 순서를 유지하면서 새 보스를 레벨순으로 뒤에 추가합니다.
-export function orderedBosses(bosses, order = []) {
+// 정렬 방식에 따라 레벨·다음 출현 시각·저장된 순서를 적용합니다.
+export function orderedBosses(bosses, order = [], sort = 'custom', now = Date.now()) {
   const ranked = [...bosses].sort((a, b) => b.level - a.level);
+  if (sort === 'level-desc') return ranked;
+  if (sort === 'level-asc') return [...bosses].sort((a, b) => a.level - b.level);
+  if (sort === 'time-asc' || sort === 'time-desc') {
+    const times = new Map(bosses.map(boss => [boss.id, bossTiming(boss, now).at]));
+    return ranked.sort((a, b) => {
+      const left = times.get(a.id);
+      const right = times.get(b.id);
+      if (left === null) return right === null ? 0 : 1;
+      if (right === null) return -1;
+      return (left - right) * (sort === 'time-asc' ? 1 : -1);
+    });
+  }
   const unique = [...new Set(order)].filter(id => ranked.some(boss => boss.id === id));
   return [...unique.map(id => ranked.find(boss => boss.id === id)), ...ranked.filter(boss => !unique.includes(boss.id))];
 }

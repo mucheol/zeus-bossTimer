@@ -100,3 +100,32 @@ test('레벨 내림차순, 사용자 순서 유지, 중복 ID 제외', () => {
   assert.equal(ordered[1].id, 'tripork');
   assert.equal(ordered.length, 9);
 });
+
+// 레벨 자동 정렬은 별도로 저장된 사용자 순서에 영향을 받지 않습니다.
+test('레벨 오름·내림차순과 동률 순서, 사용자 순서 보존', () => {
+  const bosses = [{ id: 'a', level: 45 }, { id: 'b', level: 60 }, { id: 'c', level: 45 }];
+  const order = ['c', 'b', 'a'];
+  assert.deepEqual(orderedBosses(bosses, order, 'level-asc').map(boss => boss.id), ['a', 'c', 'b']);
+  assert.deepEqual(orderedBosses(bosses, order, 'level-desc').map(boss => boss.id), ['b', 'a', 'c']);
+  assert.deepEqual(orderedBosses(bosses, order, 'custom').map(boss => boss.id), order);
+  assert.deepEqual(bosses.map(boss => boss.id), ['a', 'b', 'c']);
+  assert.deepEqual(order, ['c', 'b', 'a']);
+});
+
+// 날짜가 넘어가는 출현 예정과 자료 만료를 실제 시각으로 비교합니다.
+test('출현 시간 양방향 정렬, 날짜 넘김·동률·만료는 마지막', () => {
+  const bosses = [
+    { id: 'late', level: 35, at: '2026-10-13T00:15:00+09:00' },
+    { id: 'early', level: 45, at: '2026-10-12T23:55:00+09:00' },
+    { id: 'tie', level: 60, at: '2026-10-12T23:55:00+09:00' },
+    { id: 'stale', level: 65, at: '2026-10-12T08:00:00+09:00' }
+  ].map(boss => ({ ...boss, respawnHours: 8, observations: [{ cycleId: 'c1', spawnAt: boss.at }] }));
+  const now = Date.parse('2026-10-12T23:50:00+09:00');
+  assert.deepEqual(orderedBosses(bosses, [], 'time-asc', now).map(boss => boss.id), ['tie', 'early', 'late', 'stale']);
+  assert.deepEqual(orderedBosses(bosses, [], 'time-desc', now).map(boss => boss.id), ['late', 'tie', 'early', 'stale']);
+  const next = Date.parse('2026-10-12T23:56:00+09:00');
+  assert.deepEqual(orderedBosses(bosses, [], 'time-asc', next).map(boss => boss.id), ['late', 'tie', 'early', 'stale']);
+  assert.equal(bossTiming(bosses[1], next).kind, 'predicted');
+  const expired = Date.parse('2026-10-13T09:00:00+09:00');
+  assert.deepEqual(orderedBosses(bosses, [], 'time-desc', expired).map(boss => boss.id), ['stale', 'tie', 'early', 'late']);
+});

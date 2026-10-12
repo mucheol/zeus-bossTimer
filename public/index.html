@@ -35,8 +35,8 @@
         <p class="invasion-note">선택한 시간에만 알림 · 사전 알림 없음</p>
       </section>
       <section class="boss-section" aria-labelledby="boss-title">
-        <div class="section-line boss-heading"><h2 id="boss-title">필드 보스 <span id="boss-count">09</span></h2><button id="reorder" class="text-button" aria-pressed="false">순서 편집</button></div>
-        <div id="order-actions" class="order-actions" hidden><span>화살표로 순서를 바꿔 주세요.</span><button id="reset-order" class="text-button">레벨순 초기화</button></div>
+        <div class="section-line boss-heading"><h2 id="boss-title">필드 보스 <span id="boss-count">09</span></h2><div class="sort-controls"><select id="boss-sort" aria-label="보스 정렬"><option value="level-desc">레벨 높은순 ↓</option><option value="level-asc">레벨 낮은순 ↑</option><option value="time-asc">출현 빠른순 ↑</option><option value="time-desc">출현 늦은순 ↓</option><option value="custom">내 순서</option></select><button id="reorder" class="text-button" aria-pressed="false">순서 편집</button></div></div>
+        <div id="order-actions" class="order-actions" hidden><span>⠿ 손잡이를 끌어 이동 · 화살표로도 변경</span><button id="reset-order" class="text-button">레벨순 초기화</button></div>
         <div id="boss-list" class="boss-grid" aria-label="보스 목록"><p class="loading">시간표를 불러오고 있습니다.</p></div>
       </section>
       <aside class="notice"><span>ⓘ</span><p>관측 시각의 초는 미상입니다. 처치 시간에 따라 다음 회차가 달라질 수 있어요. <strong>추정은 다음 한 회차까지만</strong> 안내합니다.</p></aside>

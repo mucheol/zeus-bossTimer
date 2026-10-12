@@ -19,6 +19,8 @@ let saved = readStorage();
 let restored = false;
 let preferences = defaultPreferences();
 let order = Array.isArray(saved.order) ? saved.order : [];
+let sort = ['custom', 'level-asc', 'level-desc', 'time-asc', 'time-desc'].includes(saved.sort) ? saved.sort : (order.length ? 'custom' : 'level-desc');
+let drag;
 let pending = Boolean(saved.pending);
 
 // 손상되거나 사용이 차단된 기기 저장소를 안전하게 읽습니다.
@@ -26,11 +28,11 @@ function readStorage() {
   try { return JSON.parse(localStorage.getItem('zeus-settings') || '{}') || {}; } catch { return {}; }
 }
 
-// 알림 선택과 기기 토큰만 저장하며 개인 보스 기록은 저장하지 않습니다.
+// 알림·정렬 설정과 기기 토큰을 저장합니다.
 function persist() {
   try {
     saved.preferences = structuredClone(preferences);
-    localStorage.setItem('zeus-settings', JSON.stringify({ token: saved.token, preferences, order, pending }));
+    localStorage.setItem('zeus-settings', JSON.stringify({ token: saved.token, preferences, order, sort, pending }));
     storageAvailable = true;
   } catch {
     storageAvailable = false;
@@ -61,7 +63,9 @@ function restorePreferences(value) {
 // 공통 관측값의 초상화와 알림 선택을 2열 목록으로 그립니다.
 function renderBosses() {
   if (!catalog) return;
-  const bosses = orderedBosses(catalog.bosses, order);
+  clearDrag();
+  const bosses = orderedBosses(catalog.bosses, order, sort);
+  $('#boss-sort').value = sort;
   $('#boss-count').textContent = String(bosses.length).padStart(2, '0');
   $('#boss-list').innerHTML = bosses.map((boss, index) => {
     const x = (boss.portrait[0] - 110) / (2520 - 220) * 100;
@@ -71,7 +75,7 @@ function renderBosses() {
       <div class="boss-top"><div class="boss-identity"><h3>${escape(boss.name)}</h3><span class="boss-meta">Lv.${boss.level} · ${escape(boss.region)}</span></div><button class="boss-alert" data-alert="${escape(boss.id)}" aria-label="${escape(boss.name)} 알림" aria-pressed="${enabled}">${bell}<span>${enabled ? '켜짐' : '알림'}</span></button></div>
       <div class="boss-time"><div class="portrait" role="img" aria-label="${escape(boss.name)} 초상화" style="background-position:${x}% ${y}%"></div><div class="countdown"></div></div>
       <div class="card-bottom"><span class="kind"></span><span class="spawn-time"></span></div>
-      ${editing ? `<div class="move-buttons"><button data-move="${index}" data-direction="-1" aria-label="${escape(boss.name)} 앞으로" ${index === 0 ? 'disabled' : ''}>←</button><button data-move="${index}" data-direction="1" aria-label="${escape(boss.name)} 뒤로" ${index === bosses.length - 1 ? 'disabled' : ''}>→</button></div>` : ''}
+      ${editing ? `<div class="move-buttons"><button data-move="${escape(boss.id)}" data-direction="-1" aria-label="${escape(boss.name)} 앞으로" ${index === 0 ? 'disabled' : ''}>←</button><button class="drag-handle" data-drag="${escape(boss.id)}" aria-label="${escape(boss.name)} 순서 이동" title="끌어서 이동 · 방향키로 한 칸 이동">⠿</button><button data-move="${escape(boss.id)}" data-direction="1" aria-label="${escape(boss.name)} 뒤로" ${index === bosses.length - 1 ? 'disabled' : ''}>→</button></div>` : ''}
     </article>`;
   }).join('');
   tick();
@@ -81,10 +85,19 @@ function renderBosses() {
 function tick() {
   if (!catalog) return;
   const now = Date.now();
+  if (!editing && sort.startsWith('time-')) {
+    const list = $('#boss-list');
+    const bosses = orderedBosses(catalog.bosses, order, sort, now);
+    bosses.forEach((boss, index) => {
+      const card = list.querySelector(`[data-boss="${boss.id}"]`);
+      if (list.children[index] !== card) list.insertBefore(card, list.children[index]);
+    });
+  }
   for (const boss of catalog.bosses) {
     const card = document.querySelector(`[data-boss="${boss.id}"]`);
     const timing = bossTiming(boss, now);
-    card.className = `boss-card ${timing.kind} ${timing.at && timing.at - now < 600000 ? 'soon' : ''}`;
+    for (const kind of ['observed', 'predicted', 'stale']) card.classList.toggle(kind, timing.kind === kind);
+    card.classList.toggle('soon', timing.at !== null && timing.at - now < 600000);
     card.querySelector('.countdown').innerHTML = escape(remaining(timing.at, now)).replace(/(시간|분|초)/g, '<span class="time-unit">$1</span>');
     card.querySelector('.spawn-time').textContent = timing.at ? `${koreanTime(timing.at)} 예정` : `관측 ${koreanTime(Date.parse(timing.latest.capturedAt))}`;
     const kind = card.querySelector('.kind');
@@ -271,14 +284,101 @@ function openSettings() {
   if (!$('#settings').open) $('#settings').showModal();
 }
 
-// 편집 모드에서 지정 보스를 앞이나 뒤로 한 칸 이동합니다.
-function moveBoss(index, direction) {
-  const ids = orderedBosses(catalog.bosses, order).map(boss => boss.id);
+// 현재 화면의 순서를 사용자 정렬로 저장합니다.
+function saveOrder() {
+  order = [...$('#boss-list').children].map(card => card.dataset.boss);
+  sort = 'custom';
+  persist();
+}
+
+// 편집 모드에서 지정 보스를 앞이나 뒤로 지정 칸만큼 이동합니다.
+function moveBoss(id, direction, handle = false) {
+  const ids = [...$('#boss-list').children].map(card => card.dataset.boss);
+  const index = ids.indexOf(id);
+  if (index < 0 || index + direction < 0 || index + direction >= ids.length) return;
   [ids[index], ids[index + direction]] = [ids[index + direction], ids[index]];
   order = ids;
+  sort = 'custom';
   persist();
   renderBosses();
-  document.querySelector(`[data-move="${index + direction}"][data-direction="${direction}"]`)?.focus();
+  document.querySelector(handle ? `[data-drag="${id}"]` : `[data-move="${id}"][data-direction="${direction}"]`)?.focus();
+  toast(`${catalog.bosses.find(boss => boss.id === id).name} · ${index + direction + 1}번째로 이동`);
+}
+
+// 드래그 미리보기와 포인터 캡처를 정리합니다.
+function clearDrag() {
+  if (!drag) return;
+  const previous = drag;
+  drag = null;
+  cancelAnimationFrame(previous.frame);
+  previous.ghost?.remove();
+  previous.card.classList.remove('drag-source');
+  document.body.classList.remove('dragging');
+  if ($('#boss-list').hasPointerCapture(previous.pointerId)) $('#boss-list').releasePointerCapture(previous.pointerId);
+}
+
+// 손잡이를 누른 위치를 기억하고 터치·마우스 드래그를 준비합니다.
+function startDrag(event) {
+  const handle = event.target.closest('[data-drag]');
+  if (!handle || !event.isPrimary || event.button !== 0 || drag) return;
+  handle.focus({ preventScroll: true });
+  const card = handle.closest('[data-boss]');
+  const rect = card.getBoundingClientRect();
+  drag = { pointerId: event.pointerId, card, startX: event.clientX, startY: event.clientY, x: event.clientX, y: event.clientY, offsetX: event.clientX - rect.left, offsetY: event.clientY - rect.top };
+  $('#boss-list').setPointerCapture(event.pointerId);
+}
+
+// 손잡이가 일정 거리 이동한 뒤에만 순서 편집을 시작합니다.
+function moveDrag(event) {
+  if (!drag || event.pointerId !== drag.pointerId) return;
+  drag.x = event.clientX;
+  drag.y = event.clientY;
+  if (drag.ghost || Math.hypot(drag.x - drag.startX, drag.y - drag.startY) < 6) return;
+  const rect = drag.card.getBoundingClientRect();
+  const ghost = drag.card.cloneNode(true);
+  ghost.removeAttribute('data-boss');
+  ghost.setAttribute('aria-hidden', 'true');
+  ghost.inert = true;
+  ghost.classList.add('drag-ghost');
+  ghost.style.width = `${rect.width}px`;
+  ghost.style.height = `${rect.height}px`;
+  document.body.append(ghost);
+  drag.ghost = ghost;
+  drag.card.classList.add('drag-source');
+  document.body.classList.add('dragging');
+  drag.frame = requestAnimationFrame(drawDrag);
+}
+
+// 이동 위치에 카드를 삽입하고 화면 가장자리에서는 자동 스크롤합니다.
+function drawDrag(time) {
+  if (!drag?.ghost) return;
+  const elapsed = Math.min(time - (drag.lastFrame ?? time), 32);
+  drag.lastFrame = time;
+  drag.ghost.style.left = `${drag.x - drag.offsetX}px`;
+  drag.ghost.style.top = `${drag.y - drag.offsetY}px`;
+  const edge = 64;
+  const speed = drag.y < edge ? -Math.min(1, (edge - drag.y) / edge) : drag.y > innerHeight - edge ? Math.min(1, (drag.y - innerHeight + edge) / edge) : 0;
+  if (speed) window.scrollBy(0, speed * elapsed * .65);
+  const target = document.elementFromPoint(drag.x, drag.y)?.closest('#boss-list > [data-boss]');
+  if (target && target !== drag.card) {
+    const cards = [...$('#boss-list').children];
+    const after = cards.indexOf(target) > cards.indexOf(drag.card);
+    $('#boss-list').insertBefore(drag.card, after ? target.nextSibling : target);
+  }
+  drag.frame = requestAnimationFrame(drawDrag);
+}
+
+// 놓으면 순서를 저장하고 취소하면 드래그 전 순서로 복구합니다.
+function endDrag(event) {
+  if (!drag || event.pointerId !== drag.pointerId) return;
+  const id = drag.card.dataset.boss;
+  const moved = Boolean(drag.ghost);
+  if (moved && event.type === 'pointerup') saveOrder();
+  clearDrag();
+  if (!moved) return;
+  renderBosses();
+  document.querySelector(`[data-drag="${id}"]`)?.focus({ preventScroll: true });
+  if (event.type === 'pointerup') toast('내 순서로 저장했습니다.');
 }
 
 $('#settings-open').addEventListener('click', openSettings);
@@ -304,7 +404,26 @@ $('#boss-list').addEventListener('click', event => {
   const alert = event.target.closest('[data-alert]');
   const move = event.target.closest('[data-move]');
   if (alert) toggle('bosses', alert.dataset.alert);
-  if (move) moveBoss(Number(move.dataset.move), Number(move.dataset.direction));
+  if (move) moveBoss(move.dataset.move, Number(move.dataset.direction));
+});
+$('#boss-list').addEventListener('pointerdown', startDrag);
+$('#boss-list').addEventListener('pointermove', moveDrag);
+for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) $('#boss-list').addEventListener(type, endDrag);
+$('#boss-list').addEventListener('keydown', event => {
+  const handle = event.target.closest('[data-drag]');
+  if (!handle || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+  event.preventDefault();
+  const direction = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -2, ArrowDown: 2 }[event.key];
+  moveBoss(handle.dataset.drag, direction, true);
+});
+window.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && drag) { endDrag({ pointerId: drag.pointerId, type: 'pointercancel' }); event.preventDefault(); }
+});
+window.addEventListener('blur', () => { if (drag) endDrag({ pointerId: drag.pointerId, type: 'pointercancel' }); });
+$('#boss-sort').addEventListener('change', event => {
+  sort = event.target.value;
+  persist();
+  renderBosses();
 });
 $('#reorder').addEventListener('click', () => {
   editing = !editing;
@@ -313,7 +432,7 @@ $('#reorder').addEventListener('click', () => {
   $('#order-actions').hidden = !editing;
   renderBosses();
 });
-$('#reset-order').addEventListener('click', () => { order = []; persist(); renderBosses(); toast('높은 레벨 순으로 정렬했습니다.'); });
+$('#reset-order').addEventListener('click', () => { order = []; sort = 'level-desc'; persist(); renderBosses(); toast('높은 레벨 순으로 정렬했습니다.'); });
 window.addEventListener('beforeinstallprompt', event => { event.preventDefault(); installPrompt = event; $('#install').hidden = false; });
 $('#install').addEventListener('click', async () => { await installPrompt?.prompt(); installPrompt = null; $('#install').hidden = true; });
 navigator.serviceWorker?.addEventListener('message', event => { if (event.data?.type === 'UPDATED') $('#update-banner').hidden = false; });
