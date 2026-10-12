@@ -1,4 +1,4 @@
-import { defaultPreferences, orderedBosses, bossTiming, remaining, koreanTime, invasionTimes } from './lib/engine.js';
+import { defaultPreferences, normalizePreferences, orderedBosses, bossTiming, remaining, koreanTime, invasionTimes } from './lib/engine.js';
 
 // 화면에서 단일 요소를 찾습니다.
 const $ = selector => document.querySelector(selector);
@@ -24,6 +24,11 @@ let drag;
 let pending = Boolean(saved.pending);
 let administrator = false;
 let editedBoss;
+let settingsDraft;
+let settingsSaving = false;
+let settingsMessage = '';
+let pushBusy = false;
+let checkingPush = false;
 
 // 손상되거나 사용이 차단된 기기 저장소를 안전하게 읽습니다.
 function readStorage() {
@@ -57,9 +62,7 @@ function escape(value) {
 
 // 저장된 설정에서 현재 지원하는 보스와 시점만 복구합니다.
 function restorePreferences(value) {
-  const defaults = defaultPreferences();
-  return Object.fromEntries(Object.entries({ bosses: catalog.bosses.map(boss => boss.id), offsets: [600, 300, 60, 0], invasion: [0, 12, 18] })
-    .map(([key, allowed]) => [key, Array.isArray(value?.[key]) ? [...new Set(value[key].filter(item => allowed.includes(item)))] : defaults[key]]));
+  return normalizePreferences(value, catalog?.bosses.map(boss => boss.id));
 }
 
 // 공통 관측값의 초상화와 알림 선택을 2열 목록으로 그립니다.
@@ -74,7 +77,7 @@ function renderBosses() {
     const y = (boss.portrait[1] - 110) / (1080 - 220) * 100;
     const enabled = preferences.bosses.includes(boss.id);
     return `<article class="boss-card" data-boss="${escape(boss.id)}" data-alert-enabled="${enabled}" ${administrator ? `tabindex="0" aria-label="${escape(boss.name)} 공통 시간 수정"` : ''}>
-      <div class="boss-top"><div class="boss-identity"><h3>${escape(boss.name)}</h3><span class="boss-meta">Lv.${boss.level} · ${escape(boss.region)}</span></div><button class="boss-alert" data-alert="${escape(boss.id)}" aria-label="${escape(boss.name)} 알림" aria-pressed="${enabled}">${bell}<span>${enabled ? '켜짐' : '알림'}</span></button></div>
+      <div class="boss-top"><div class="boss-identity"><h3>${escape(boss.name)}</h3><span class="boss-meta">Lv.${boss.level} · ${escape(boss.region)}</span></div><button class="boss-alert" data-alert="${escape(boss.id)}" aria-label="${escape(boss.name)} 알림" aria-pressed="${enabled}">${bell}<span>${enabled ? preferences.enabled ? '켜짐' : '일시중지' : '알림'}</span></button></div>
       <div class="boss-time"><div class="portrait" role="img" aria-label="${escape(boss.name)} 초상화" style="background-position:${x}% ${y}%"></div><div class="countdown" role="timer" title="남은 시간 · 분 단위"></div></div>
       <div class="card-bottom"><span class="kind"></span><span class="spawn-time"></span></div>
       ${editing ? `<div class="move-buttons"><button data-move="${escape(boss.id)}" data-direction="-1" aria-label="${escape(boss.name)} 앞으로" ${index === 0 ? 'disabled' : ''}>←</button><button class="drag-handle" data-drag="${escape(boss.id)}" aria-label="${escape(boss.name)} 순서 이동" title="끌어서 이동 · 방향키로 한 칸 이동">⠿</button><button data-move="${escape(boss.id)}" data-direction="1" aria-label="${escape(boss.name)} 뒤로" ${index === bosses.length - 1 ? 'disabled' : ''}>→</button></div>` : ''}
@@ -119,20 +122,26 @@ function tick() {
 
 // 알림 토글과 실제 서버 저장 상태를 함께 표시합니다.
 function renderSettings() {
+  for (const button of $('#settings').querySelectorAll('button')) button.disabled = settingsSaving;
+  document.body.classList.toggle('alerts-paused', !preferences.enabled);
   for (const button of document.querySelectorAll('[data-hour]')) {
     const enabled = preferences.invasion.includes(Number(button.dataset.hour));
     button.setAttribute('aria-pressed', enabled);
-    button.querySelector('span').textContent = enabled ? '알림 켜짐' : '알림 꺼짐';
+    button.querySelector('span').textContent = enabled ? preferences.enabled ? '알림 켜짐' : '선택 · 중지' : '알림 꺼짐';
     button.setAttribute('aria-label', `${button.dataset.hour}시 침공 알림`);
   }
-  for (const button of document.querySelectorAll('[data-offset]')) button.setAttribute('aria-pressed', preferences.offsets.includes(Number(button.dataset.offset)));
-  $('#test-push').disabled = !connected;
+  $('#test-push').disabled = settingsSaving || pushBusy || !connected || !preferences.enabled;
+  $('#connect').disabled = settingsSaving || pushBusy;
+  $('#disconnect').disabled = settingsSaving || pushBusy;
+  $('#check-permission').disabled = settingsSaving || pushBusy || checkingPush;
+  $('#settings-save').disabled = settingsSaving || pushBusy || !catalog;
   $('#disconnect').hidden = !subscription;
   $('#connect').hidden = connected;
   $('#sync-status').textContent = connected ? (pending ? '변경사항 저장 대기 · 연결되면 다시 시도합니다.' : '이 기기의 알림 선택이 서버에 저장됐습니다.') : '선택은 이 기기에 저장됩니다. 알림 연결 후 적용됩니다.';
-  const title = connected ? '이 기기 알림 연결됨' : '화면을 닫아도 보스 알림';
+  const title = !preferences.enabled ? '전체 알림 꺼짐' : connected ? '이 기기 알림 연결됨' : '화면을 닫아도 보스 알림';
   $('#connect-banner strong').textContent = title;
-  $('#connect-banner small').textContent = connected ? (pending ? '변경사항이 아직 서버에 저장되지 않았습니다.' : '필드 보스와 침공 시간을 선택해 주세요.') : '홈 화면에 추가하고 알림을 연결하세요.';
+  $('#connect-banner small').textContent = !preferences.enabled ? (pending && connected ? '서버 저장 대기 · 아직 알림이 도착할 수 있습니다.' : '환경설정에서 다시 켜세요. 개별 선택은 유지됩니다.') : connected ? (pending ? '변경사항이 아직 서버에 저장되지 않았습니다.' : '필드 보스와 침공 시간을 선택해 주세요.') : '홈 화면에 추가하고 알림을 연결하세요.';
+  renderSettingsDraft();
 }
 
 // 동일 출처 API에 기기 인증을 붙여 요청합니다.
@@ -148,7 +157,7 @@ async function api(path, method = 'POST', body) {
 
 // 선택 변경을 순서대로 저장해 늦게 도착한 요청의 덮어쓰기를 막습니다.
 async function syncPreferences() {
-  if (!connected || !subscription || disconnecting || syncing || !pending) return;
+  if (!connected || !subscription || disconnecting || syncing || settingsSaving || !pending) return;
   syncing = true;
   try {
     while (pending && !disconnecting) {
@@ -224,10 +233,12 @@ function publicKeyBytes(key) {
 
 // 사용자가 누른 순간 푸시 구독을 요청하고 서버 예약을 연결합니다.
 async function connect() {
+  if (pushBusy || settingsSaving) return;
   const unsupported = pushSupport();
   if (unsupported) { $('#push-status').textContent = unsupported; return; }
   if (!registration || !config?.ready) { toast('푸시 준비가 아직 완료되지 않았습니다. 잠시 후 다시 시도해 주세요.'); return; }
-  $('#connect').disabled = true;
+  pushBusy = true;
+  renderSettings();
   try {
     if (!saved.token) saved.token = [...crypto.getRandomValues(new Uint8Array(32))].map(byte => byte.toString(16).padStart(2, '0')).join('');
     persist();
@@ -245,14 +256,16 @@ async function connect() {
   } catch (error) {
     $('#push-status').textContent = pushSupport() || `연결 실패: ${error.message}`;
   } finally {
-    $('#connect').disabled = false;
+    pushBusy = false;
     renderSettings();
   }
 }
 
 // 서버 예약을 먼저 제거하고 브라우저 구독도 해제합니다.
 async function disconnect() {
-  $('#disconnect').disabled = true;
+  if (pushBusy || settingsSaving || !confirm('이 기기의 푸시 연결과 모든 예약을 즉시 해제할까요? 개별 선택은 유지됩니다.')) return;
+  pushBusy = true;
+  renderSettings();
   disconnecting = true;
   try {
     if (syncing) await new Promise(resolve => { syncTask = { resolve }; });
@@ -264,34 +277,125 @@ async function disconnect() {
     toast('이 기기의 예약 알림을 해제했습니다.');
   } catch (error) { toast(error.message); } finally {
     disconnecting = false;
-    $('#disconnect').disabled = false;
+    pushBusy = false;
     renderSettings();
   }
 }
 
 // 서비스 워커와 기존 구독을 복구하고 저장 대기 설정을 재전송합니다.
 async function initializePush() {
+  if (pushBusy || checkingPush || settingsSaving) return;
+  checkingPush = true;
+  renderSettings();
   try {
     if (!('serviceWorker' in navigator)) throw new Error(pushSupport());
     registration = await navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' });
     await navigator.serviceWorker.ready;
-    config = await fetch('/api/config', { cache: 'no-store' }).then(response => response.json());
+    config = await fetch('/api/config', { cache: 'no-store', signal: AbortSignal.timeout(15000) }).then(response => response.json());
     subscription = await registration.pushManager?.getSubscription();
     if (subscription && saved.token) {
       const status = await api('/api/status');
       connected = status.connected;
-      if (connected && !pending && catalog) preferences = restorePreferences(status.preferences);
+      if (connected && !pending && catalog) {
+        const changed = settingsChanged();
+        preferences = restorePreferences(status.preferences);
+        if (settingsDraft && !changed) settingsDraft = structuredClone(preferences);
+        persist();
+      }
       if (connected) await syncPreferences();
     }
     $('#push-status').textContent = pushSupport() || (connected ? '이 기기의 시스템 알림이 연결되어 있습니다.' : config.ready ? '원하는 알림을 선택하고 알림을 연결하세요.' : '화면 사용 가능 · 운영자의 푸시 배포 설정이 필요합니다.');
     renderSettings();
     renderBosses();
-  } catch (error) { $('#push-status').textContent = error.message || '알림 연결을 확인할 수 없습니다.'; }
+  } catch (error) { $('#push-status').textContent = error.message || '알림 연결을 확인할 수 없습니다.'; } finally { checkingPush = false; renderSettings(); }
 }
 
-// 설정 창을 열고 현재 기기의 설치 안내를 보여 줍니다.
+// 저장된 값의 사본으로 환경설정 편집을 시작합니다.
 function openSettings() {
-  if (!$('#settings').open) $('#settings').showModal();
+  if ($('#settings').open) return;
+  settingsDraft = structuredClone(preferences);
+  settingsMessage = '';
+  renderSettings();
+  $('#settings').showModal();
+}
+
+// 선택 순서가 바뀌어도 실제 설정값이 같은지 비교합니다.
+function settingsFingerprint(value) {
+  return JSON.stringify({ enabled: value.enabled, bosses: [...value.bosses].sort(), offsets: [...value.offsets].sort(), invasion: [...value.invasion].sort() });
+}
+
+// 아직 저장하지 않은 환경설정 변경을 확인합니다.
+function settingsChanged() {
+  return Boolean(settingsDraft && settingsFingerprint(settingsDraft) !== settingsFingerprint(preferences));
+}
+
+// 임시 설정과 실제 푸시 연결 상태를 구분해 표시합니다.
+function renderSettingsDraft() {
+  if (!settingsDraft) return;
+  $('#alerts-enabled').setAttribute('aria-checked', settingsDraft.enabled);
+  $('#alerts-enabled').textContent = settingsDraft.enabled ? '켜짐' : '꺼짐';
+  for (const button of document.querySelectorAll('[data-offset]')) button.setAttribute('aria-pressed', settingsDraft.offsets.includes(Number(button.dataset.offset)));
+  for (const button of document.querySelectorAll('[data-settings-hour]')) button.setAttribute('aria-pressed', settingsDraft.invasion.includes(Number(button.dataset.settingsHour)));
+  const list = $('#settings-bosses');
+  if (catalog && list.dataset.revision !== catalog.revision) {
+    list.innerHTML = catalog.bosses.map(boss => `<button data-settings-boss="${escape(boss.id)}" aria-pressed="false">${escape(boss.name)}</button>`).join('');
+    list.dataset.revision = catalog.revision;
+  }
+  for (const button of list.querySelectorAll('button')) {
+    button.setAttribute('aria-pressed', settingsDraft.bosses.includes(button.dataset.settingsBoss));
+    button.disabled = settingsSaving;
+  }
+  $('#settings-save').textContent = settingsSaving ? '저장 중…' : '설정 저장';
+  $('#settings-status').textContent = settingsMessage || (settingsChanged() ? '저장하지 않은 변경사항이 있습니다.' : '이 기기에 적용할 설정을 선택하고 저장하세요.');
+}
+
+// 환경설정의 선택은 저장 전까지 임시값만 바꿉니다.
+function changeSettings(key, value) {
+  if (!settingsDraft || settingsSaving) return;
+  settingsDraft[key] = key === 'enabled' ? !settingsDraft.enabled : settingsDraft[key].includes(value) ? settingsDraft[key].filter(item => item !== value) : [...settingsDraft[key], value];
+  settingsMessage = '';
+  renderSettingsDraft();
+}
+
+// X·닫기·Escape에서 변경 폐기를 확인합니다.
+function closeSettings() {
+  if (settingsSaving) return;
+  if (settingsChanged() && !confirm('저장하지 않은 변경사항이 있습니다. 변경사항을 버리고 닫을까요?')) return;
+  settingsDraft = null;
+  $('#settings').close();
+}
+
+// 서버 저장이 성공한 설정만 실제 선택으로 반영합니다.
+async function saveSettings() {
+  if (!settingsDraft || settingsSaving || pushBusy) return;
+  if (settingsDraft.enabled && settingsDraft.bosses.length && !settingsDraft.offsets.length) {
+    settingsMessage = '필드 보스 알림 시점을 하나 이상 선택해 주세요.';
+    renderSettingsDraft();
+    return;
+  }
+  const candidate = restorePreferences(settingsDraft);
+  settingsSaving = true;
+  settingsMessage = '';
+  renderSettings();
+  try {
+    if (syncing) await new Promise(resolve => { syncTask = { resolve }; });
+    if (connected) await api('/api/subscription', 'PUT', { subscription: subscription.toJSON(), preferences: candidate });
+    preferences = candidate;
+    pending = !connected;
+    persist();
+    if (!storageAvailable) throw new Error('기기 저장에 실패했습니다. 저장소 권한을 확인해 주세요.');
+    settingsDraft = null;
+    $('#settings').close();
+    renderBosses();
+    toast(!preferences.enabled ? '전체 알림을 껐습니다. 개별 선택은 유지됩니다.' : connected ? '알림 설정을 저장했습니다.' : '기기에 저장했습니다. 푸시 알림을 연결해 주세요.');
+  } catch (error) { settingsMessage = `저장 실패: ${error.message}`; } finally { settingsSaving = false; renderSettings(); }
+}
+
+// 현재 기기에 맞는 시스템 알림 설정 경로를 안내합니다.
+function showDeviceNotifications() {
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  $('#device-guide').textContent = ios ? 'iPhone: 홈 화면에 추가한 앱에서 푸시 알림을 허용하세요. 소리·배너는 iPhone 설정 → 알림 → 설치한 제우스 앱에서 변경합니다. 차단했으면 알림 허용을 다시 켜세요.' : /Android/.test(navigator.userAgent) ? 'Android: 휴대폰 설정 → 앱 → Chrome 또는 설치한 제우스 앱 → 알림에서 알림·소리·진동을 확인하세요. 사이트 권한은 Chrome → 설정 → 사이트 설정 → 알림에서 이 사이트를 허용하세요.' : '브라우저 주소창의 사이트 정보 → 알림에서 허용하세요. 소리·배너는 운영체제 설정 → 알림 → 사용 중인 브라우저에서 확인합니다.';
+  $('#device-guide').hidden = false;
 }
 
 // 관리자 상태를 화면에만 반영하며 권한 판단은 서버에 맡깁니다.
@@ -471,11 +575,23 @@ $('#boss-edit-form').addEventListener('submit', async event => {
   } catch (error) { $('#boss-edit-status').textContent = error.message; } finally { $('#boss-edit-save').disabled = false; }
 });
 $('#connect-banner').addEventListener('click', openSettings);
-$('#settings-close').addEventListener('click', () => $('#settings').close());
+$('#settings-close').addEventListener('click', closeSettings);
+$('#settings-cancel').addEventListener('click', closeSettings);
+$('#settings').addEventListener('cancel', event => { event.preventDefault(); closeSettings(); });
+$('#settings-save').addEventListener('click', saveSettings);
+$('#alerts-enabled').addEventListener('click', () => changeSettings('enabled'));
+$('#device-notifications').addEventListener('click', showDeviceNotifications);
+$('#check-permission').addEventListener('click', initializePush);
+$('#select-all-bosses').addEventListener('click', () => { if (settingsDraft && !settingsSaving) { settingsDraft.bosses = catalog?.bosses.map(boss => boss.id) || []; settingsMessage = ''; renderSettingsDraft(); } });
+$('#clear-bosses').addEventListener('click', () => { if (settingsDraft && !settingsSaving) { settingsDraft.bosses = []; settingsMessage = ''; renderSettingsDraft(); } });
+$('#settings-bosses').addEventListener('click', event => { const button = event.target.closest('[data-settings-boss]'); if (button) changeSettings('bosses', button.dataset.settingsBoss); });
+$('#settings-invasion').addEventListener('click', event => { const button = event.target.closest('[data-settings-hour]'); if (button) changeSettings('invasion', Number(button.dataset.settingsHour)); });
+window.addEventListener('beforeunload', event => { if (settingsChanged()) { event.preventDefault(); event.returnValue = ''; } });
 $('#refresh').addEventListener('click', refresh);
 $('#connect').addEventListener('click', connect);
 $('#disconnect').addEventListener('click', disconnect);
 $('#test-push').addEventListener('click', async () => {
+  if (!connected || !preferences.enabled || settingsSaving || pushBusy) return;
   $('#test-push').disabled = true;
   try { await api('/api/test'); toast('10초 뒤 발송합니다. 화면을 잠가 확인해 보세요.'); } catch (error) { toast(error.message); }
   setTimeout(renderSettings, 3000);
@@ -486,7 +602,7 @@ $('#invasion-buttons').addEventListener('click', event => {
 });
 $('#offsets').addEventListener('click', event => {
   const button = event.target.closest('[data-offset]');
-  if (button) toggle('offsets', Number(button.dataset.offset));
+  if (button) changeSettings('offsets', Number(button.dataset.offset));
 });
 $('#boss-list').addEventListener('click', event => {
   const alert = event.target.closest('[data-alert]');

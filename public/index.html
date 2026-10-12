@@ -18,7 +18,7 @@
   <div class="app">
     <header class="header">
       <a class="brand" href="/" aria-label="제우스 타이머 홈"><span class="brand-mark">ϟ</span><span>ZEUS<span class="brand-sub">BOSS TIMER</span></span></a>
-      <div class="header-actions"><button id="admin-open" class="text-button" aria-pressed="false">관리자</button><button id="settings-open" class="icon-button" aria-label="알림 및 설치 설정"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 17h16M8 4v6m8 4v6"/></svg></button></div>
+      <div class="header-actions"><button id="admin-open" class="text-button outlined-button" aria-pressed="false">관리자</button><button id="settings-open" class="icon-button" aria-label="환경설정"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 3-.5 2a7 7 0 0 0-2 1L5.5 5.5l-2 3.5L5 10.5a7 7 0 0 0 0 3L3.5 15l2 3.5L7.5 18a7 7 0 0 0 2 1l.5 2h4l.5-2a7 7 0 0 0 2-1l2 .5 2-3.5-1.5-1.5a7 7 0 0 0 0-3L20.5 9l-2-3.5-2 .5a7 7 0 0 0-2-1L14 3Z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
     </header>
     <main>
       <section class="intro">
@@ -46,20 +46,29 @@
     <footer><span>ZEUS BOSS TIMER</span><span>모든 시간은 한국시간 · KST</span></footer>
   </div>
   <dialog id="settings">
-    <div class="dialog-heading"><h2>알림 · 앱 설정</h2><button id="settings-close" class="icon-button" aria-label="설정 닫기">×</button></div>
+    <div class="dialog-heading"><h2>환경설정</h2><button id="settings-close" class="icon-button" aria-label="설정 닫기">×</button></div>
+    <div class="master-setting"><div><h3>전체 알림</h3><p class="small-note">꺼도 보스별 선택은 유지됩니다.</p></div><button id="alerts-enabled" class="toggle-button" role="switch" aria-checked="true">켜짐</button></div>
     <div id="push-status" class="push-status" role="status">알림 연결을 확인하고 있습니다.</div>
     <p class="settings-copy">앱을 닫거나 화면을 잠가도 시스템 알림을 받습니다. 소리와 진동은 휴대폰의 알림 설정을 따릅니다.</p>
-    <div class="push-actions"><button id="connect" class="primary">알림 연결</button><button id="test-push" class="secondary" disabled>10초 뒤 테스트</button><button id="disconnect" class="text-button" hidden>연결 해제</button></div>
-    <p class="small-note">테스트를 누른 뒤 화면을 잠가 수신을 확인하세요.</p>
+    <div class="push-actions"><button id="connect" class="primary">푸시 알림 허용 · 연결</button><button id="test-push" class="secondary" disabled>10초 뒤 테스트</button><button id="device-notifications" class="secondary">기기 알림 설정 안내</button><button id="check-permission" class="text-button">권한 다시 확인</button><button id="disconnect" class="text-button" hidden>연결 해제</button></div>
+    <p class="small-note">권한 허용·연결·테스트·연결 해제는 즉시 실행됩니다. 아래 선택과 전체 알림은 저장 후 적용됩니다.</p>
+    <div id="device-guide" class="install-guide" hidden></div>
     <hr>
-    <h3>필드 보스 알림 시점</h3><p class="small-note">목록에서 알림을 켠 보스에만 적용합니다.</p>
-    <div id="offsets" class="offsets"><button data-offset="600" aria-pressed="false">10분 전</button><button data-offset="300" aria-pressed="true">5분 전</button><button data-offset="60" aria-pressed="false">1분 전</button><button data-offset="0" aria-pressed="true">예정 시각</button></div>
+    <h3>필드 보스 알림 시점</h3><p class="small-note">여러 개 선택 가능 · 기본 5분 전</p>
+    <div id="offsets" class="offsets"><button data-offset="60" aria-pressed="false">1분 전</button><button data-offset="180" aria-pressed="false">3분 전</button><button data-offset="300" aria-pressed="true">5분 전</button></div>
+    <hr>
+    <div class="section-line"><h3>알림 받을 필드 보스</h3><div><button id="select-all-bosses" class="text-button">전체 선택</button><button id="clear-bosses" class="text-button">전체 해제</button></div></div>
+    <div id="settings-bosses" class="choice-grid"></div>
+    <hr>
+    <h3>침공 보스</h3><p class="small-note">한국시간 정각에만 알림</p>
+    <div id="settings-invasion" class="offsets"><button data-settings-hour="0" aria-pressed="false">00시</button><button data-settings-hour="12" aria-pressed="false">12시</button><button data-settings-hour="18" aria-pressed="false">18시</button></div>
     <p id="sync-status" class="small-note" role="status"></p>
     <hr>
     <h3>홈 화면에 추가</h3>
     <div id="install-guide" class="install-guide"><p><strong>iPhone</strong> Safari의 공유 → 홈 화면에 추가 → 추가한 앱에서 알림 연결. iOS 16.4 이상이 필요합니다.</p><p><strong>Android</strong> Chrome 메뉴 → 홈 화면에 추가 또는 앱 설치.</p></div>
     <button id="install" class="secondary" hidden>앱 설치</button>
     <p class="small-note">인터넷 연결과 알림 허용이 필요합니다. 집중 모드·절전·네트워크 상황에 따라 도착이 늦어질 수 있습니다. 침공 정각과 일반 보스 알림은 분 단위로 발송을 확인합니다.</p>
+    <div class="settings-footer"><p id="settings-status" class="small-note" role="status"></p><div><button id="settings-cancel" class="secondary">닫기</button><button id="settings-save" class="primary">설정 저장</button></div></div>
   </dialog>
   <dialog id="admin-panel">
     <div class="dialog-heading"><h2>관리자</h2><button id="admin-close" class="icon-button" aria-label="관리자 창 닫기">×</button></div>

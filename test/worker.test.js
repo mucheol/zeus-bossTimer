@@ -49,10 +49,36 @@ test('구독 저장·침공 취소·해제, 다른 토큰의 기존 주소 탈�
   assert.equal((await env.DB.prepare('SELECT COUNT(*) AS count FROM jobs').first()).count, 0);
 });
 
+// 전체 알림을 끄면 예약·대기 푸시·테스트를 막고 선택은 보존합니다.
+test('전체 알림 저장·중지·테스트 차단·다시 켜기와 기존 시점 이관', async context => {
+  const env = await environment(context);
+  const preferences = { enabled: true, bosses: ['tripork'], offsets: [60, 180, 300], invasion: [0, 12, 18] };
+  assert.equal((await worker.fetch(request('/api/subscription', 'PUT', { subscription: env.subscription, preferences }), env)).status, 200);
+  assert.equal((await worker.fetch(request('/api/test', 'POST'), env)).status, 200);
+  const job = await env.DB.prepare("SELECT * FROM jobs WHERE state='queued'").first();
+  preferences.enabled = false;
+  await worker.fetch(request('/api/subscription', 'PUT', { subscription: env.subscription, preferences }), env);
+  assert.equal((await env.DB.prepare("SELECT COUNT(*) AS count FROM jobs WHERE state IN ('queued','pending')").first()).count, 0);
+  assert.deepEqual((await (await worker.fetch(request('/api/status', 'POST'), env)).json()).preferences, preferences);
+  assert.equal((await worker.fetch(request('/api/test', 'POST'), env)).status, 409);
+  await env.DB.prepare("UPDATE jobs SET state='queued' WHERE id=?").bind(job.id).run();
+  await deliver(env, job.id, job.due_at, async () => assert.fail('전체 중지 후 푸시 발송'));
+  assert.equal((await env.DB.prepare('SELECT state FROM jobs WHERE id=?').bind(job.id).first()).state, 'cancelled');
+  preferences.enabled = true;
+  await worker.fetch(request('/api/subscription', 'PUT', { subscription: env.subscription, preferences }), env);
+  assert.ok((await env.DB.prepare("SELECT COUNT(*) AS count FROM jobs WHERE state='pending'").first()).count > 0);
+  const legacy = { bosses: ['tripork'], offsets: [600, 0], invasion: [12] };
+  await env.DB.prepare("UPDATE devices SET preferences=?,revision='old'").bind(JSON.stringify(legacy)).run();
+  await schedule(env, Date.now());
+  const migrated = JSON.parse((await env.DB.prepare('SELECT preferences FROM devices').first()).preferences);
+  assert.deepEqual(migrated, { enabled: true, bosses: ['tripork'], offsets: [300], invasion: [12] });
+  assert.equal((await worker.fetch(request('/api/subscription', 'PUT', { subscription: env.subscription, preferences: { ...preferences, enabled: 'false' } }), env)).status, 400);
+});
+
 // 최대 선택 기기 5대의 반복 예약도 무료 실행당 쿼리 한도 안에서 갱신합니다.
 test('전체 보스·모든 시점의 5기기 반복 예약은 50쿼리 이내', async context => {
   const env = await environment(context);
-  const preferences = { bosses: catalog.bosses.map(boss => boss.id), offsets: [600, 300, 60, 0], invasion: [0, 12, 18] };
+  const preferences = { bosses: catalog.bosses.map(boss => boss.id), offsets: [60, 180, 300], invasion: [0, 12, 18] };
   for (let index = 1; index <= 5; index++) {
     const subscription = { ...env.subscription, endpoint: `${env.subscription.endpoint}-${index}` };
     assert.equal((await worker.fetch(request('/api/subscription', 'PUT', { subscription, preferences }, String(index).repeat(64)), env)).status, 200);
@@ -185,7 +211,7 @@ test('관리자 인증 후 공통 시간 저장, 전체 기기 공유, 초 제�
   const env = await environment(context);
   const now = Date.parse('2026-10-12T14:10:37.500+09:00');
   context.mock.method(Date, 'now', () => now);
-  const preferences = { bosses: ['bedix'], offsets: [0], invasion: [] };
+  const preferences = { bosses: ['bedix'], offsets: [60], invasion: [] };
   await worker.fetch(request('/api/subscription', 'PUT', { subscription: env.subscription, preferences }), env);
   const oldJob = await env.DB.prepare('SELECT * FROM jobs ORDER BY due_at LIMIT 1').first();
   const login = await worker.fetch(request('/api/admin/login', 'POST', { password: env.ADMIN_PASSWORD }), env);
@@ -209,7 +235,7 @@ test('관리자 인증 후 공통 시간 저장, 전체 기기 공유, 초 제�
   assert.equal((await env.DB.prepare('SELECT state FROM jobs WHERE id=?').bind(oldJob.id).first()).state, 'cancelled');
   await schedule(env, now);
   const next = await env.DB.prepare("SELECT * FROM jobs WHERE state='pending' ORDER BY due_at LIMIT 1").first();
-  assert.equal(next.due_at, now + 72 * 60000);
+  assert.equal(next.due_at, now + 71 * 60000);
   const logout = request('/api/admin/logout', 'POST');
   logout.headers.set('Cookie', cookie);
   assert.equal((await worker.fetch(logout, env)).status, 200);

@@ -1,11 +1,24 @@
 export const HOURS = [0, 12, 18];
-export const OFFSETS = [600, 300, 60, 0];
+export const OFFSETS = [60, 180, 300];
 export const DAY = 86400000;
 const KST = 9 * 3600000;
 
 // 새 기기의 알림 기본 선택을 만듭니다.
 export function defaultPreferences() {
-  return { bosses: [], offsets: [300, 0], invasion: [] };
+  return { enabled: true, bosses: [], offsets: [300], invasion: [] };
+}
+
+// 기존 알림 선택을 새 시점과 전체 알림 상태로 이관합니다.
+export function normalizePreferences(value, bossIds) {
+  const defaults = defaultPreferences();
+  const offsets = Array.isArray(value?.offsets) ? [...new Set(value.offsets.filter(item => OFFSETS.includes(item)))] : defaults.offsets;
+  if (!offsets.length && value?.offsets?.some(item => item === 0 || item === 600)) offsets.push(300);
+  return {
+    enabled: typeof value?.enabled === 'boolean' ? value.enabled : true,
+    bosses: Array.isArray(value?.bosses) ? [...new Set(value.bosses.filter(item => !bossIds || bossIds.includes(item)))] : [],
+    offsets,
+    invasion: Array.isArray(value?.invasion) ? [...new Set(value.invasion.filter(item => HOURS.includes(item)))] : []
+  };
 }
 
 // 지역별 출현 후 기본 처치시간을 반환합니다.
@@ -99,6 +112,8 @@ export function invasionTimes(now, days = 3) {
 
 // 반복 회차의 3일치 미래 알림을 만들며 침공은 정각만 예약합니다.
 export function plannedEvents(catalog, preferences, now) {
+  preferences = normalizePreferences(preferences, catalog.bosses.map(boss => boss.id));
+  if (!preferences.enabled) return [];
   const events = [];
   for (const boss of catalog.bosses) {
     if (!preferences.bosses.includes(boss.id)) continue;

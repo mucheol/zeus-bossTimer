@@ -1,4 +1,4 @@
-import { HOURS, OFFSETS } from '../public/lib/engine.js';
+import { HOURS, OFFSETS, normalizePreferences } from '../public/lib/engine.js';
 
 // 크기가 제한된 JSON 본문만 읽습니다.
 export async function readBody(request) {
@@ -39,11 +39,13 @@ export function selection(value, allowed) {
 // 등록된 보스와 지원 시점에 한해서 기기 설정을 검증합니다.
 export function validatePreferences(value, catalog) {
   if (!value || typeof value !== 'object') throw invalid('알림 설정이 필요합니다.');
-  return {
+  if (value.enabled !== undefined && typeof value.enabled !== 'boolean') throw invalid('전체 알림 설정이 올바르지 않습니다.');
+  return normalizePreferences({
+    enabled: value.enabled,
     bosses: selection(value.bosses, catalog.bosses.map(boss => boss.id)),
-    offsets: selection(value.offsets, OFFSETS),
+    offsets: selection(value.offsets, [...OFFSETS, 0, 600]),
     invasion: selection(value.invasion, HOURS)
-  };
+  });
 }
 
 // 푸시 키의 URL-safe Base64를 바이트로 읽습니다.

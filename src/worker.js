@@ -1,12 +1,12 @@
 import { buildPushPayload } from '@block65/webcrypto-web-push';
-import { plannedEvents, DAY } from '../public/lib/engine.js';
+import { plannedEvents, DAY, normalizePreferences } from '../public/lib/engine.js';
 import { deviceId, validatePreferences, validateSubscription, readBody } from './validation.js';
 import { loadCatalog } from './catalog.js';
 import { adminApi } from './admin.js';
 
 // 반복 예약 정책과 관측 자료 변경을 함께 감지합니다.
 function planRevision(catalog) {
-  return `${catalog.revision}:kill-calibration-v1`;
+  return `${catalog.revision}:settings-v2`;
 }
 
 // API 응답의 캐시와 외부 스크립트 접근을 제한합니다.
@@ -61,7 +61,7 @@ async function api(request, env) {
   }
   if (url.pathname === '/api/status' && request.method === 'POST') {
     const row = await env.DB.prepare('SELECT preferences FROM devices WHERE id=?').bind(id).first();
-    return json({ connected: Boolean(row), preferences: row ? JSON.parse(row.preferences) : null });
+    return json({ connected: Boolean(row), preferences: row ? normalizePreferences(JSON.parse(row.preferences)) : null });
   }
   if (!ready) return json({ error: '운영자가 푸시 배포 설정을 완료하지 않았습니다.' }, 503);
   if (url.pathname === '/api/subscription' && request.method === 'PUT') {
@@ -72,6 +72,8 @@ async function api(request, env) {
     return json({ ok: true });
   }
   if (url.pathname === '/api/test' && request.method === 'POST') {
+    const device = await env.DB.prepare('SELECT preferences FROM devices WHERE id=?').bind(id).first();
+    if (device && !normalizePreferences(JSON.parse(device.preferences)).enabled) return json({ error: '전체 알림을 켜고 저장한 뒤 테스트해 주세요.' }, 409);
     const now = Date.now();
     const allowed = await env.DB.prepare('UPDATE devices SET test_at=? WHERE id=? AND test_at<? RETURNING id').bind(now, id, now - 60000).first();
     if (!allowed) return json({ error: '알림을 연결한 뒤 테스트해 주세요. 테스트는 1분마다 가능합니다.' }, 429);
@@ -90,10 +92,11 @@ export async function schedule(env, now = Date.now()) {
   const revision = planRevision(catalog);
   const { results: devices } = await env.DB.prepare('SELECT id,preferences,revision FROM devices WHERE revision!=? OR planned_until<? LIMIT 5').bind(revision, now).all();
   for (const device of devices) {
+    const preferences = normalizePreferences(JSON.parse(device.preferences), catalog.bosses.map(boss => boss.id));
     await env.DB.batch([
       env.DB.prepare("UPDATE jobs SET state='cancelled' WHERE device_id=? AND state IN ('pending','queued') AND (due_at>? OR ?!=?)").bind(device.id, now, revision, device.revision),
-      ...jobStatements(env, device.id, JSON.parse(device.preferences), now, catalog),
-      env.DB.prepare('UPDATE devices SET revision=?,planned_until=? WHERE id=?').bind(revision, now + DAY, device.id)
+      ...jobStatements(env, device.id, preferences, now, catalog),
+      env.DB.prepare('UPDATE devices SET revision=?,planned_until=?,preferences=? WHERE id=?').bind(revision, now + DAY, JSON.stringify(preferences), device.id)
     ]);
   }
   await env.DB.prepare("UPDATE jobs SET state='expired' WHERE expires_at<=? AND state IN ('pending','queued','sending')").bind(now).run();
@@ -110,8 +113,12 @@ export async function deliver(env, id, now = Date.now(), send = fetch) {
   const job = await env.DB.prepare(`UPDATE jobs SET state='sending',attempts=attempts+1,lease_until=?
     WHERE id=? AND state='queued' AND expires_at>? AND attempts<4 RETURNING *`).bind(now + 120000, id, now).first();
   if (!job) return;
-  const device = await env.DB.prepare('SELECT subscription,revision FROM devices WHERE id=?').bind(job.device_id).first();
+  const device = await env.DB.prepare('SELECT subscription,revision,preferences FROM devices WHERE id=?').bind(job.device_id).first();
   if (!device) return;
+  if (!normalizePreferences(JSON.parse(device.preferences)).enabled) {
+    await env.DB.prepare("UPDATE jobs SET state='cancelled' WHERE id=?").bind(id).run();
+    return;
+  }
   if (!id.includes(':test:') && device.revision !== planRevision(await loadCatalog(env))) {
     await env.DB.prepare("UPDATE jobs SET state='cancelled' WHERE id=?").bind(id).run();
     return;

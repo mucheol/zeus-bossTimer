@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import catalog from '../public/data/catalog.json' with { type: 'json' };
-import { estimate, bossTiming, invasionTimes, plannedEvents, orderedBosses, defaultPreferences, remaining, defaultKillSeconds } from '../public/lib/engine.js';
+import { estimate, bossTiming, invasionTimes, plannedEvents, orderedBosses, defaultPreferences, remaining, defaultKillSeconds, normalizePreferences } from '../public/lib/engine.js';
 
 const previousCatalog = structuredClone(catalog);
 for (const boss of previousCatalog.bosses) {
@@ -11,6 +11,22 @@ const noonCatalog = structuredClone(catalog);
 for (const boss of noonCatalog.bosses) {
   boss.observations = boss.observations.filter(observation => Date.parse(observation.capturedAt) <= Date.parse('2026-10-12T12:25:00+09:00'));
 }
+
+// 이전 시점은 새 선택으로 이관하며 전체 중지는 선택 자체를 지우지 않습니다.
+test('1·3·5분 시점·기존 설정 이관·전체 알림 중지와 복원', () => {
+  assert.deepEqual(defaultPreferences(), { enabled: true, bosses: [], offsets: [300], invasion: [] });
+  assert.deepEqual(normalizePreferences({ bosses: ['bedix'], offsets: [600, 0], invasion: [12] }).offsets, [300]);
+  assert.deepEqual(normalizePreferences({ offsets: [60, 180, 300, 600, 0] }).offsets, [60, 180, 300]);
+  const prefs = { enabled: true, bosses: ['bedix'], offsets: [60, 180, 300], invasion: [0, 12, 18] };
+  const now = Date.parse('2026-10-12T12:01:00+09:00');
+  const before = plannedEvents(catalog, prefs, now);
+  assert.ok(before.filter(event => event.key.startsWith('bedix:')).every(event => /:(60|180|300)$/.test(event.key)));
+  prefs.enabled = false;
+  assert.deepEqual(plannedEvents(catalog, prefs, now), []);
+  assert.deepEqual(prefs.bosses, ['bedix']);
+  prefs.enabled = true;
+  assert.deepEqual(plannedEvents(catalog, prefs, now), before);
+});
 
 // 보정자료가 없을 때는 지정한 지역 기본값을 매 회차 한 번만 더합니다.
 test('테살리아 15초·자하브 30초 기본 처치시간과 화면·푸시 일치', () => {
@@ -22,7 +38,7 @@ test('테살리아 15초·자하브 30초 기본 처치시간과 화면·푸시 
     assert.equal(model.interval, 8 * 3600000 + seconds * 1000);
     assert.equal(bossTiming(boss, start).at, start + model.interval);
     assert.equal(bossTiming(boss, start + model.interval).at, start + 2 * model.interval);
-    assert.equal(plannedEvents({ bosses: [boss] }, { bosses: ['test'], offsets: [0], invasion: [] }, start)[0].dueAt, bossTiming(boss, start).at);
+    assert.equal(plannedEvents({ bosses: [boss] }, { bosses: ['test'], offsets: [60], invasion: [] }, start)[0].dueAt, bossTiming(boss, start).at - 60000);
   }
 });
 
@@ -144,12 +160,12 @@ test('13:52 관측 9마리 갱신, 알라스토르만 새 회차, 기존 연속 
     assert.ok(learned.killSeconds <= (added ? added / 1000 : defaultKillSeconds(boss)));
   }
   const now = Date.parse(catalog.capturedAt);
-  const preferences = { bosses: ['bedix', 'tripork'], offsets: [600, 300, 60, 0], invasion: [] };
+  const preferences = { bosses: ['bedix', 'tripork'], offsets: [60, 180, 300], invasion: [] };
   const events = plannedEvents(catalog, preferences, now).filter(event => event.key.includes(':0:'));
-  assert.equal(events.length, 4);
+  assert.equal(events.length, 3);
   assert.ok(events.every(event => event.dueAt > now));
-  assert.ok(events.every(event => !event.key.endsWith(':300') && !event.key.endsWith(':600')));
-  assert.equal(events.find(event => event.key.startsWith('bedix:') && event.key.endsWith(':0')).dueAt, Date.parse('2026-10-12T13:53:48+09:00'));
+  assert.ok(events.every(event => !event.key.endsWith(':300')));
+  assert.equal(events.find(event => event.key.startsWith('bedix:') && event.key.endsWith(':60')).dueAt, Date.parse('2026-10-12T13:52:48+09:00'));
 });
 
 // 지난 회차는 처치된 것으로 가정하되 추정을 실제 관측으로 학습하지 않습니다.
@@ -174,12 +190,12 @@ test('반복 회차 푸시 예약, 매일 갱신해도 회차 키 유지와 미�
   const boss = catalog.bosses.find(item => item.id === 'bedix');
   const at = Date.parse(estimate(boss).latest.spawnAt);
   const now = at + 3 * estimate(boss).interval + 60000;
-  const prefs = { bosses: [boss.id], offsets: [300, 0], invasion: [] };
+  const prefs = { bosses: [boss.id], offsets: [300, 60], invasion: [] };
   const events = plannedEvents(catalog, prefs, now);
   const timing = bossTiming(boss, now);
   assert.ok(events.length > 2);
   assert.equal(events[0].dueAt, timing.at - 300000);
-  assert.equal(events[1].dueAt, timing.at);
+  assert.equal(events[1].dueAt, timing.at - 60000);
   assert.ok(events[0].key.includes(':4:300'));
   assert.ok(events[0].body.includes('반복 추정'));
   assert.ok(events.every(event => event.dueAt > now && event.dueAt <= now + 3 * 86400000));
@@ -239,9 +255,9 @@ test('KST 자정·12시·18시 침공, 정각만 예약하고 지난 알림 없�
 // 회차를 보정해도 예약 ID가 같고 이미 지난 알림은 재생하지 않습니다.
 test('같은 회차 보정은 같은 알림 키, 지난 시점 제외', () => {
   const now = Date.parse('2026-10-12T12:18:00+09:00');
-  const prefs = { bosses: ['chrysophagos'], offsets: [600, 300, 60, 0], invasion: [] };
+  const prefs = { bosses: ['chrysophagos'], offsets: [60, 180, 300], invasion: [] };
   const before = plannedEvents(previousCatalog, prefs, now);
-  assert.equal(before.filter(event => event.key.includes(':0:')).length, 2);
+  assert.equal(before.filter(event => event.key.includes(':0:')).length, 1);
   const copy = structuredClone(previousCatalog);
   copy.bosses.find(boss => boss.id === 'chrysophagos').observations.at(-1).spawnAt = '2026-10-12T12:20:40+09:00';
   const after = plannedEvents(copy, prefs, now);
