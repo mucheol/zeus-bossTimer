@@ -233,7 +233,7 @@ test('과거 관리자 이력 전체 보존·조회와 분 입력의 처치시�
 // 인증·공통 저장·다른 기기 조회와 수정 후 예약 교체를 실제 D1에서 검사합니다.
 test('관리자 인증 후 공통 시간 저장, 전체 기기 공유, 초 제거와 예약 교체', async context => {
   const env = await environment(context);
-  const now = Date.parse('2026-10-12T18:10:37.500+09:00');
+  const now = Date.parse(catalog.capturedAt) + 60 * 60000 + 37500;
   context.mock.method(Date, 'now', () => now);
   const preferences = { bosses: ['bedix'], offsets: [60], invasion: [] };
   await worker.fetch(request('/api/subscription', 'PUT', { subscription: env.subscription, preferences }), env);
@@ -317,7 +317,7 @@ test('큐 생산자 장애 즉시 재시도와 다음 분 예약 회수', async 
 // 개인 알림은 서로 독립이며 공통 수정·취소만 모든 기기에 보입니다.
 test('두 기기 개인 설정 격리, 관리자 이력·연속 되돌리기·동시 수정 방어', async context => {
   const env = await environment(context);
-  let now = Date.parse('2026-10-12T18:00:00+09:00');
+  let now = Date.parse(catalog.capturedAt) + 60 * 60000;
   context.mock.method(Date, 'now', () => now);
   const first = { enabled: true, bosses: ['bedix'], offsets: [60], invasion: [0] };
   const second = { enabled: false, bosses: ['tripork'], offsets: [300], invasion: [18] };

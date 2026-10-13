@@ -26,6 +26,11 @@ for (const boss of secondsCatalog.bosses) {
   boss.observations = boss.observations.filter(observation => Date.parse(observation.capturedAt) <= Date.parse(secondsCatalog.capturedAt));
 }
 
+const eveningCatalog = { ...structuredClone(catalog), revision: '2026-10-12-screenshot-009-v1', source: 'screenshot-009', capturedAt: '2026-10-12T17:17:00+09:00', capturedSecondsKnown: true };
+for (const boss of eveningCatalog.bosses) {
+  boss.observations = boss.observations.filter(observation => Date.parse(observation.capturedAt) <= Date.parse(eveningCatalog.capturedAt));
+}
+
 // 이전 시점은 새 선택으로 이관하며 전체 중지는 선택 자체를 지우지 않습니다.
 test('1·3·5분 시점·기존 설정 이관·전체 알림 중지와 복원', () => {
   assert.deepEqual(defaultPreferences(), { enabled: true, bosses: [], offsets: [300], invasion: [] });
@@ -245,10 +250,10 @@ test('16:30:20 관측 9마리와 초 표시 3마리 보정·이력 보존', () =
 
 // 촬영 초만 확인된 분 표시는 원본과 현재 기준만 갱신합니다.
 test('17:17:00 관측 71개 보존·세 보스 새 회차·현재 처치시간 0초', () => {
-  assert.equal(catalog.source, 'screenshot-009');
-  assert.equal(catalog.capturedAt, '2026-10-12T17:17:00+09:00');
+  assert.equal(eveningCatalog.source, 'screenshot-009');
+  assert.equal(eveningCatalog.capturedAt, '2026-10-12T17:17:00+09:00');
   const minutes = { tripork: 522, bedix: 278, gotsis: 120, alastor: 224, iokantos: 685, kini: 688, thrason: 461, chrysophagos: 184, amorphos: 187 };
-  for (const boss of catalog.bosses) {
+  for (const boss of eveningCatalog.bosses) {
     const previous = secondsCatalog.bosses.find(item => item.id === boss.id);
     const latest = boss.observations.at(-1);
     assert.deepEqual(boss.observations.slice(0, -1), previous.observations);
@@ -263,7 +268,38 @@ test('17:17:00 관측 71개 보존·세 보스 새 회차·현재 처치시간 0
     assert.equal(estimate(boss).killSeconds, 0);
     assert.equal(estimate(boss).sampleCount, 0);
   }
-  assert.equal(catalog.bosses.reduce((sum, boss) => sum + boss.observations.length, 0), 71);
+  assert.equal(eveningCatalog.bosses.reduce((sum, boss) => sum + boss.observations.length, 0), 71);
+});
+
+// 새 관측의 예정값·이력과 중간 회차 누락을 검사하며 분 자료는 학습하지 않습니다.
+test('10/13 09:34:00 관측 80개 보존·세 연속 회차·여섯 중간 회차 누락', () => {
+  assert.equal(catalog.revision, '2026-10-13-screenshot-010-v1');
+  assert.equal(catalog.source, 'screenshot-010');
+  assert.equal(catalog.capturedAt, '2026-10-13T09:34:00+09:00');
+  assert.equal(catalog.capturedSecondsKnown, true);
+  const expected = { tripork: [267, '14:01'], bedix: [263, '13:57'], gotsis: [105, '11:19'], alastor: [208, '13:02'], iokantos: [428, '16:42'], kini: [431, '16:45'], thrason: [445, '16:59'], chrysophagos: [168, '12:22'], amorphos: [171, '12:25'] };
+  const now = Date.parse(catalog.capturedAt);
+  for (const boss of catalog.bosses) {
+    const before = eveningCatalog.bosses.find(item => item.id === boss.id);
+    const latest = boss.observations.at(-1);
+    assert.deepEqual(boss.observations.slice(0, -1), before.observations);
+    assert.equal(latest.source, catalog.source);
+    assert.equal(latest.capturedAt, catalog.capturedAt);
+    assert.equal(latest.capturedSecondsKnown, true);
+    assert.equal(latest.remainingSecondsKnown, false);
+    assert.equal(latest.precisionSeconds, 60);
+    assert.equal(latest.spawnAt, `2026-10-13T${expected[boss.id][1]}:00+09:00`);
+    assert.equal(Date.parse(latest.spawnAt) - now, expected[boss.id][0] * 60000);
+    assert.notEqual(latest.cycleId, before.observations.at(-1).cycleId);
+    const consecutive = ['tripork', 'iokantos', 'kini'].includes(boss.id);
+    assert.equal(latest.consecutiveFrom, consecutive ? before.observations.at(-1).cycleId : undefined);
+    assert.equal(bossTiming(boss, now).at, Date.parse(latest.spawnAt));
+    assert.equal(bossTiming(boss, Date.parse(latest.spawnAt)).at, Date.parse(latest.spawnAt) + boss.respawnHours * 3600000);
+    assert.equal(remaining(bossTiming(boss, now + 60000).at, now + 60000), remaining(Date.parse(latest.spawnAt) - 60000, now));
+    assert.equal(estimate(boss).killSeconds, 0);
+    assert.equal(estimate(boss).sampleCount, 0);
+  }
+  assert.equal(catalog.bosses.reduce((sum, boss) => sum + boss.observations.length, 0), 80);
 });
 
 // 거친 재촬영이 앞선 정확한 학습 기준을 덮어쓰지 않게 합니다.
