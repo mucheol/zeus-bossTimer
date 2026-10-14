@@ -178,3 +178,4 @@ screenshot-007 배포 후 공개 HTTPS의 촬영 시각 ‘10. 12. 15:29:00 관�
 
 - 9마리를 추가해 총 125개 관측을 보존했습니다. 이오칸토스·키니 러우리·트라손만 남은 초(44초·38초·22초)가 확인되어 정밀도 1초이고 나머지는 60초입니다. 014 예정과 비교해 9마리 모두 같은 출현이라 `cycleId`·`consecutiveFrom`을 유지했습니다. revision은 `2026-10-14-screenshot-015-v1`입니다.
 - 014 검사는 15:57:10 시점 스냅샷(`eveningUpdate`) 기준으로 옮기고 015 검사를 추가했습니다.
+- `npm test` 50개, `npm run check`, `git diff --check` 통과. 기존 Worker에 `npx wrangler deploy` 했습니다(버전 `db9072a4-c909-4b54-bb82-863aa288fe82`, D1·큐·Worker 재생성 없음). 공개 `/data/catalog.json`의 revision·9마리 예정값·관측 125개와 메인 페이지 200을 확인했습니다. 이 배포에는 014 반영분도 함께 포함됩니다. 브라우저 화면·실기기 푸시는 검증하지 않았습니다.
