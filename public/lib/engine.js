@@ -21,56 +21,12 @@ export function normalizePreferences(value, bossIds) {
   };
 }
 
-// 촬영 시각과 남은 초가 확인된 기록만 처치시간 학습 회차로 묶습니다.
-function learningCycles(boss) {
-  const cycles = new Map();
-  const observations = boss.observations.filter(item => item.capturedSecondsKnown && item.remainingSecondsKnown && item.precisionSeconds === 1);
-  for (const observation of observations.filter(item => !item.source?.startsWith('admin-'))) {
-    cycles.set(observation.cycleId, { ...observation, manual: false });
-  }
-  for (const observation of observations.filter(item => item.source?.startsWith('admin-'))) {
-    const closest = [...cycles.values()].sort((a, b) => Math.abs(Date.parse(a.spawnAt) - Date.parse(observation.spawnAt)) - Math.abs(Date.parse(b.spawnAt) - Date.parse(observation.spawnAt)))[0];
-    const tolerance = Math.max(180, (closest?.precisionSeconds || 0) + (observation.precisionSeconds || 60)) * 1000;
-    if (closest && Math.abs(Date.parse(closest.spawnAt) - Date.parse(observation.spawnAt)) <= tolerance) {
-      if (Date.parse(observation.capturedAt) >= Date.parse(closest.capturedAt)) {
-        cycles.set(closest.cycleId, { ...observation, cycleId: closest.cycleId, consecutiveFrom: closest.consecutiveFrom, manual: true });
-      } else closest.manual = true;
-    } else cycles.set(observation.cycleId, { ...observation, manual: true });
-  }
-  return [...cycles.values()].sort((a, b) => Date.parse(a.spawnAt) - Date.parse(b.spawnAt));
-}
+// 처치시간 보정은 0초로 고정하며 관측 자료로 학습하지 않습니다.
+export const KILL_SECONDS = 0;
 
-// 실제 회차 간격과 입력 정밀도로 처치시간을 보스별로 보정합니다.
+// 고정 리스폰 간격과 최신 관측을 반환합니다. 처치시간은 항상 0초입니다.
 export function estimate(boss) {
-  const samples = learningCycles(boss);
-  const base = boss.respawnHours * 3600000;
-  const intervals = [];
-  for (let i = 1; i < samples.length; i++) {
-    const after = samples[i];
-    const before = samples.find(item => item.cycleId === after.consecutiveFrom) || samples[i - 1];
-    const delta = Date.parse(after.spawnAt) - Date.parse(before.spawnAt);
-    const confirmed = after.consecutiveFrom === before.cycleId;
-    const manual = before.manual || after.manual;
-    if (!confirmed && !manual) continue;
-    const count = confirmed ? 1 : Math.round(delta / base);
-    if (count < 1 || count > 30) continue;
-    const uncertainty = ((before.precisionSeconds || 0) + (after.precisionSeconds || 0)) / count;
-    const delay = (delta / count - base) / 1000;
-    if (delay < -uncertainty) continue;
-    intervals.push({ delay: Math.max(0, delay), weight: 1 / Math.max(1, uncertainty / 30), manual });
-  }
-  const recent = intervals.slice(-10).sort((a, b) => a.delay - b.delay);
-  const weight = recent.reduce((sum, item) => sum + item.weight, 0);
-  let cumulative = 0, median = 0;
-  for (const [index, item] of recent.entries()) {
-    cumulative += item.weight;
-    if (cumulative >= weight / 2) {
-      median = Math.abs(cumulative - weight / 2) < 1e-9 && recent[index + 1] ? (item.delay + recent[index + 1].delay) / 2 : item.delay;
-      break;
-    }
-  }
-  const killSeconds = median;
-  return { latest: boss.observations.at(-1), interval: base + killSeconds * 1000, killSeconds, sampleCount: recent.length, manualSampleCount: recent.filter(item => item.manual).length };
+  return { latest: boss.observations.at(-1), interval: boss.respawnHours * 3600000 + KILL_SECONDS * 1000, killSeconds: KILL_SECONDS, sampleCount: 0, manualSampleCount: 0 };
 }
 
 // 예정 시각이 지나면 처치된 것으로 가정하고 현재 이후 회차를 계산합니다.
@@ -115,7 +71,7 @@ export function plannedEvents(catalog, preferences, now) {
   const events = [];
   for (const boss of catalog.bosses) {
     if (!preferences.bosses.includes(boss.id)) continue;
-    const { latest, interval, sampleCount } = estimate(boss);
+    const { latest, interval } = estimate(boss);
     const observedAt = Date.parse(latest.spawnAt);
     const first = Math.max(0, Math.floor((now - observedAt) / interval));
     for (let index = first; observedAt + index * interval <= now + 3 * DAY + Math.max(0, ...preferences.offsets) * 1000; index++) {
@@ -128,7 +84,7 @@ export function plannedEvents(catalog, preferences, now) {
           key: `${boss.id}:${latest.cycleId}:${index}:${offset}`,
           dueAt, expiresAt: Math.min(dueAt + 120000, offset ? at : dueAt + 120000),
           title: `${boss.name} · ${offset ? `${offset / 60}분 전` : '예정 시각'}`,
-          body: `${koreanTime(at)} 한국시간 · ${qualifier}${index && sampleCount < 2 ? ' / 보정자료 부족' : ''}`
+          body: `${koreanTime(at)} 한국시간 · ${qualifier}`
         });
       }
     }

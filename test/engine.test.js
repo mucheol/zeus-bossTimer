@@ -336,33 +336,34 @@ test('10/14 14:03:25 관측 89개 보존·전원 새 회차·트리포크 남은
   assert.equal(catalog.bosses.reduce((sum, boss) => sum + boss.observations.length, 0), 89);
 });
 
-// 거친 재촬영이 앞선 정확한 학습 기준을 덮어쓰지 않게 합니다.
-test('남은 초가 확인된 연속 회차만 학습하고 분 입력은 현재 기준에만 반영', () => {
+// 정확한 초 단위 연속 자료와 관리자 분 입력이 있어도 처치시간은 0초로 고정합니다.
+test('처치시간 0초 고정·정확한 연속 자료와 분 입력도 학습하지 않음', () => {
   const at = Date.parse('2026-10-12T16:40:46+09:00');
   const exact = { capturedSecondsKnown: true, remainingSecondsKnown: true, precisionSeconds: 1 };
   const boss = { respawnHours: 12, observations: [
     { ...exact, source: 'screenshot-a', cycleId: 'a', spawnAt: new Date(at).toISOString() },
-    { source: 'screenshot-a-coarse', cycleId: 'a', spawnAt: new Date(at + 59000).toISOString() },
     { ...exact, source: 'screenshot-b', cycleId: 'b', consecutiveFrom: 'a', spawnAt: new Date(at + 12 * 3600000 + 15000).toISOString() }
   ] };
-  assert.equal(estimate(boss).killSeconds, 15);
-  assert.equal(estimate(boss).sampleCount, 1);
+  assert.equal(estimate(boss).killSeconds, 0);
+  assert.equal(estimate(boss).sampleCount, 0);
+  assert.equal(estimate(boss).interval, 12 * 3600000);
   boss.observations.push({ source: 'admin-minutes', cycleId: 'b', spawnAt: new Date(at + 12 * 3600000 + 60000).toISOString(), precisionSeconds: 60 });
-  assert.equal(estimate(boss).killSeconds, 15);
+  assert.equal(estimate(boss).killSeconds, 0);
   assert.equal(estimate(boss).latest.source, 'admin-minutes');
+  assert.equal(bossTiming(boss, at + 13 * 3600000).at, at + 12 * 3600000 + 60000 + 12 * 3600000);
 });
 
-// 처치시간은 임의 상한 없이 누적 보정하고 기본 리스폰 자체는 유지합니다.
-test('고정 리스폰 유지와 처치시간 상한 없는 누적 보정', () => {
+// 지연이 크거나 정밀도가 달라도 리스폰 간격은 고정 리스폰 그대로입니다.
+test('고정 리스폰 유지와 지연 자료가 있어도 처치시간 0초', () => {
   const at = Date.parse('2026-10-12T00:00:00+09:00');
   for (const [precision, delay] of [[1, 120], [60, 120], [120, 120], [1, 900]]) {
     const boss = { region: '자하브', respawnHours: 8, observations: [
       { source: 'screenshot-1', cycleId: 'a', capturedAt: new Date(at - 60000).toISOString(), spawnAt: new Date(at).toISOString(), capturedSecondsKnown: true, remainingSecondsKnown: precision === 1, precisionSeconds: precision },
       { source: 'screenshot-2', cycleId: 'b', consecutiveFrom: 'a', capturedAt: new Date(at + 8 * 3600000).toISOString(), spawnAt: new Date(at + 8 * 3600000 + delay * 1000).toISOString(), capturedSecondsKnown: true, remainingSecondsKnown: precision === 1, precisionSeconds: precision }
     ] };
-    assert.equal(estimate(boss).killSeconds, precision === 1 ? delay : 0);
-    assert.equal(estimate(boss).interval, 8 * 3600000 + estimate(boss).killSeconds * 1000);
-    assert.equal(estimate(boss).sampleCount, precision === 1 ? 1 : 0);
+    assert.equal(estimate(boss).killSeconds, 0);
+    assert.equal(estimate(boss).interval, 8 * 3600000);
+    assert.equal(estimate(boss).sampleCount, 0);
   }
 });
 
@@ -420,8 +421,8 @@ test('분 단위 남은 시간, 시·분 경계, 기기 시각 변경과 만료'
   assert.deepEqual([0, 60000, 120000, 180000, 240000].map(elapsed => remaining(fourMinutes, now + elapsed)), ['4분', '3분', '2분', '1분', '0분']);
 });
 
-// 명시된 연속 회차만 중앙값에 사용하고 짧거나 누락된 간격은 제외합니다.
-test('최근 최대 10개 연속 간격의 중앙값만 사용', () => {
+// 연속 간격이 많아도 간격은 항상 고정 리스폰입니다.
+test('연속 간격 12개가 있어도 간격은 고정 리스폰', () => {
   const start = Date.parse('2026-10-01T00:00:00+09:00');
   let at = start;
   const precise = { capturedSecondsKnown: true, remainingSecondsKnown: true, precisionSeconds: 1 };
@@ -431,12 +432,9 @@ test('최근 최대 10개 연속 간격의 중앙값만 사용', () => {
     observations.push({ ...precise, cycleId: `c${i}`, consecutiveFrom: `c${i - 1}`, spawnAt: new Date(at).toISOString() });
   }
   const boss = { respawnHours: 8, observations };
-  assert.equal(estimate(boss).sampleCount, 10);
-  assert.equal(estimate(boss).interval, 8 * 3600000 + 7500);
-  observations.push({ cycleId: 'missed', spawnAt: new Date(at + 16 * 3600000).toISOString() });
-  assert.equal(estimate(boss).sampleCount, 10);
-  observations.push({ cycleId: 'short', consecutiveFrom: 'missed', spawnAt: new Date(at + 17 * 3600000).toISOString() });
-  assert.equal(estimate(boss).sampleCount, 10);
+  assert.equal(estimate(boss).sampleCount, 0);
+  assert.equal(estimate(boss).killSeconds, 0);
+  assert.equal(estimate(boss).interval, 8 * 3600000);
 });
 
 // 지나간 침공 시간은 다음날 예약하며 일반 보스의 사전 알림과 분리합니다.
