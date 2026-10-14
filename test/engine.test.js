@@ -46,6 +46,11 @@ for (const boss of afternoonUpdate.bosses) {
   boss.observations = boss.observations.filter(observation => Date.parse(observation.capturedAt) <= Date.parse(afternoonUpdate.capturedAt));
 }
 
+const eveningUpdate = { ...structuredClone(catalog), revision: '2026-10-14-screenshot-014-v1', source: 'screenshot-014', capturedAt: '2026-10-14T15:57:10+09:00', capturedSecondsKnown: true };
+for (const boss of eveningUpdate.bosses) {
+  boss.observations = boss.observations.filter(observation => Date.parse(observation.capturedAt) <= Date.parse(eveningUpdate.capturedAt));
+}
+
 // 이전 시점은 새 선택으로 이관하며 전체 중지는 선택 자체를 지우지 않습니다.
 test('1·3·5분 시점·기존 설정 이관·전체 알림 중지와 복원', () => {
   assert.deepEqual(defaultPreferences(), { enabled: true, bosses: [], offsets: [300], invasion: [] });
@@ -356,21 +361,21 @@ test('10/14 14:03:25 관측 보존·운영 011/012 이력 유지·같은 출현�
 
 // 15:57:10 관측은 이미지를 보관하지 않고 시간만 저장하며 같은 출현과 다음 회차를 구분합니다.
 test('10/14 15:57:10 관측 116개 보존·같은 출현 5마리·다음 회차 4마리·초 확인 두 보스', () => {
-  assert.equal(catalog.revision, '2026-10-14-screenshot-014-v1');
-  assert.equal(catalog.source, 'screenshot-014');
-  assert.equal(catalog.capturedAt, '2026-10-14T15:57:10+09:00');
-  assert.equal(catalog.capturedSecondsKnown, true);
+  assert.equal(eveningUpdate.revision, '2026-10-14-screenshot-014-v1');
+  assert.equal(eveningUpdate.source, 'screenshot-014');
+  assert.equal(eveningUpdate.capturedAt, '2026-10-14T15:57:10+09:00');
+  assert.equal(eveningUpdate.capturedSecondsKnown, true);
   const expected = { tripork: '2026-10-15T02:05:10', bedix: '2026-10-14T23:09:10', gotsis: '2026-10-14T19:22:10', alastor: '2026-10-14T23:04:10', iokantos: '2026-10-14T16:42:44', kini: '2026-10-14T16:45:38', thrason: '2026-10-14T17:00:10', chrysophagos: '2026-10-14T20:23:10', amorphos: '2026-10-14T20:26:10' };
   const next = ['tripork', 'bedix', 'alastor'];
   const exact = ['iokantos', 'kini'];
-  const now = Date.parse(catalog.capturedAt);
-  for (const boss of catalog.bosses) {
+  const now = Date.parse(eveningUpdate.capturedAt);
+  for (const boss of eveningUpdate.bosses) {
     const before = afternoonUpdate.bosses.find(item => item.id === boss.id);
     const latest = boss.observations.at(-1);
     const previous = before.observations.at(-1);
     assert.deepEqual(boss.observations.slice(0, -1), before.observations);
-    assert.equal(latest.source, catalog.source);
-    assert.equal(latest.capturedAt, catalog.capturedAt);
+    assert.equal(latest.source, eveningUpdate.source);
+    assert.equal(latest.capturedAt, eveningUpdate.capturedAt);
     assert.equal(latest.capturedSecondsKnown, true);
     assert.equal(latest.remainingSecondsKnown, exact.includes(boss.id));
     assert.equal(latest.precisionSeconds, exact.includes(boss.id) ? 1 : 60);
@@ -385,8 +390,37 @@ test('10/14 15:57:10 관측 116개 보존·같은 출현 5마리·다음 회차 
     assert.equal(bossTiming(boss, now).at, Date.parse(latest.spawnAt));
     assert.equal(estimate(boss).killSeconds, 0);
   }
-  assert.equal(Date.parse(catalog.bosses.find(boss => boss.id === 'iokantos').observations.at(-1).spawnAt) - now, (45 * 60 + 34) * 1000);
-  assert.equal(catalog.bosses.reduce((sum, boss) => sum + boss.observations.length, 0), 116);
+  assert.equal(Date.parse(eveningUpdate.bosses.find(boss => boss.id === 'iokantos').observations.at(-1).spawnAt) - now, (45 * 60 + 34) * 1000);
+  assert.equal(eveningUpdate.bosses.reduce((sum, boss) => sum + boss.observations.length, 0), 116);
+});
+
+// 16:26:00 관측은 9마리 모두 014와 같은 출현이며 남은 초는 세 보스만 확인됩니다.
+test('10/14 16:26:00 관측 125개 보존·전부 같은 출현·초 확인 세 보스', () => {
+  assert.equal(catalog.revision, '2026-10-14-screenshot-015-v1');
+  assert.equal(catalog.source, 'screenshot-015');
+  assert.equal(catalog.capturedAt, '2026-10-14T16:26:00+09:00');
+  assert.equal(catalog.capturedSecondsKnown, true);
+  const expected = { tripork: '2026-10-15T02:05:00', bedix: '2026-10-14T23:09:00', gotsis: '2026-10-14T19:23:00', alastor: '2026-10-14T23:04:00', iokantos: '2026-10-14T16:42:44', kini: '2026-10-14T16:45:38', thrason: '2026-10-14T16:59:22', chrysophagos: '2026-10-14T20:23:00', amorphos: '2026-10-14T20:26:00' };
+  const exact = ['iokantos', 'kini', 'thrason'];
+  const now = Date.parse(catalog.capturedAt);
+  for (const boss of catalog.bosses) {
+    const before = eveningUpdate.bosses.find(item => item.id === boss.id);
+    const latest = boss.observations.at(-1);
+    const previous = before.observations.at(-1);
+    assert.deepEqual(boss.observations.slice(0, -1), before.observations);
+    assert.equal(latest.source, catalog.source);
+    assert.equal(latest.capturedAt, catalog.capturedAt);
+    assert.equal(latest.capturedSecondsKnown, true);
+    assert.equal(latest.remainingSecondsKnown, exact.includes(boss.id));
+    assert.equal(latest.precisionSeconds, exact.includes(boss.id) ? 1 : 60);
+    assert.equal(latest.spawnAt, `${expected[boss.id]}+09:00`);
+    assert.equal(latest.cycleId, previous.cycleId);
+    assert.equal(latest.consecutiveFrom, previous.consecutiveFrom);
+    assert.equal(bossTiming(boss, now).at, Date.parse(latest.spawnAt));
+    assert.equal(estimate(boss).killSeconds, 0);
+  }
+  assert.equal(Date.parse(catalog.bosses.find(boss => boss.id === 'thrason').observations.at(-1).spawnAt) - now, (33 * 60 + 22) * 1000);
+  assert.equal(catalog.bosses.reduce((sum, boss) => sum + boss.observations.length, 0), 125);
 });
 
 // 정확한 초 단위 연속 자료와 관리자 분 입력이 있어도 처치시간은 0초로 고정합니다.
