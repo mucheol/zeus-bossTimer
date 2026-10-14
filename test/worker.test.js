@@ -9,7 +9,7 @@ import { estimate, plannedEvents } from '../public/lib/engine.js';
 
 // 실제 암호화가 가능한 브라우저 구독키와 VAPID 키를 만듭니다.
 async function environment(context) {
-  context.mock.method(Date, 'now', () => Date.parse('2026-10-12T12:01:00+09:00'));
+  context.mock.method(Date, 'now', () => Date.parse(catalog.capturedAt));
   const platform = await getPlatformProxy({ persist: false, remoteBindings: false });
   context.after(() => platform.dispose());
   const DB = platform.env.DB;
