@@ -1,8 +1,8 @@
 {
-  "revision": "2026-10-18-screenshot-017-v1",
-  "capturedAt": "2026-10-18T07:40:00+09:00",
+  "revision": "2026-10-20-screenshot-018-v1",
+  "capturedAt": "2026-10-20T08:42:00+09:00",
   "capturedSecondsKnown": false,
-  "source": "screenshot-017",
+  "source": "screenshot-018",
   "bosses": [
     {
       "id": "tripork",
@@ -149,6 +149,15 @@
           "capturedSecondsKnown": false,
           "remainingSecondsKnown": false,
           "spawnAt": "2026-10-18T14:05:00+09:00",
+          "precisionSeconds": 120
+        },
+        {
+          "source": "screenshot-018",
+          "cycleId": "tripork-20261020-morning",
+          "capturedAt": "2026-10-20T08:42:00+09:00",
+          "capturedSecondsKnown": false,
+          "remainingSecondsKnown": false,
+          "spawnAt": "2026-10-20T14:05:00+09:00",
           "precisionSeconds": 120
         }
       ]
@@ -304,6 +313,15 @@
           "remainingSecondsKnown": false,
           "spawnAt": "2026-10-18T15:09:00+09:00",
           "precisionSeconds": 120
+        },
+        {
+          "source": "screenshot-018",
+          "cycleId": "bedix-20261020-morning",
+          "capturedAt": "2026-10-20T08:42:00+09:00",
+          "capturedSecondsKnown": false,
+          "remainingSecondsKnown": false,
+          "spawnAt": "2026-10-20T15:36:00+09:00",
+          "precisionSeconds": 120
         }
       ]
     },
@@ -453,6 +471,15 @@
           "capturedSecondsKnown": false,
           "remainingSecondsKnown": false,
           "spawnAt": "2026-10-18T11:23:00+09:00",
+          "precisionSeconds": 120
+        },
+        {
+          "source": "screenshot-018",
+          "cycleId": "gotsis-20261020-morning",
+          "capturedAt": "2026-10-20T08:42:00+09:00",
+          "capturedSecondsKnown": false,
+          "remainingSecondsKnown": false,
+          "spawnAt": "2026-10-20T11:23:00+09:00",
           "precisionSeconds": 120
         }
       ]
@@ -609,6 +636,15 @@
           "remainingSecondsKnown": false,
           "spawnAt": "2026-10-18T15:05:00+09:00",
           "precisionSeconds": 120
+        },
+        {
+          "source": "screenshot-018",
+          "cycleId": "alastor-20261020-morning",
+          "capturedAt": "2026-10-20T08:42:00+09:00",
+          "capturedSecondsKnown": false,
+          "remainingSecondsKnown": false,
+          "spawnAt": "2026-10-20T15:34:00+09:00",
+          "precisionSeconds": 120
         }
       ]
     },
@@ -759,6 +795,15 @@
           "capturedSecondsKnown": false,
           "remainingSecondsKnown": false,
           "spawnAt": "2026-10-18T16:43:00+09:00",
+          "precisionSeconds": 120
+        },
+        {
+          "source": "screenshot-018",
+          "cycleId": "iokantos-20261020-morning",
+          "capturedAt": "2026-10-20T08:42:00+09:00",
+          "capturedSecondsKnown": false,
+          "remainingSecondsKnown": false,
+          "spawnAt": "2026-10-20T16:43:00+09:00",
           "precisionSeconds": 120
         }
       ]
@@ -911,6 +956,15 @@
           "remainingSecondsKnown": false,
           "spawnAt": "2026-10-18T16:46:00+09:00",
           "precisionSeconds": 120
+        },
+        {
+          "source": "screenshot-018",
+          "cycleId": "kini-20261020-morning",
+          "capturedAt": "2026-10-20T08:42:00+09:00",
+          "capturedSecondsKnown": false,
+          "remainingSecondsKnown": false,
+          "spawnAt": "2026-10-20T16:46:00+09:00",
+          "precisionSeconds": 120
         }
       ]
     },
@@ -1060,6 +1114,15 @@
           "remainingSecondsKnown": false,
           "spawnAt": "2026-10-18T09:00:00+09:00",
           "precisionSeconds": 120
+        },
+        {
+          "source": "screenshot-018",
+          "cycleId": "thrason-20261020-morning",
+          "capturedAt": "2026-10-20T08:42:00+09:00",
+          "capturedSecondsKnown": false,
+          "remainingSecondsKnown": true,
+          "spawnAt": "2026-10-20T08:59:38+09:00",
+          "precisionSeconds": 60
         }
       ]
     },
@@ -1215,6 +1278,15 @@
           "remainingSecondsKnown": false,
           "spawnAt": "2026-10-18T12:24:00+09:00",
           "precisionSeconds": 120
+        },
+        {
+          "source": "screenshot-018",
+          "cycleId": "chrysophagos-20261020-morning",
+          "capturedAt": "2026-10-20T08:42:00+09:00",
+          "capturedSecondsKnown": false,
+          "remainingSecondsKnown": false,
+          "spawnAt": "2026-10-20T12:24:00+09:00",
+          "precisionSeconds": 120
         }
       ]
     },
@@ -1369,6 +1441,15 @@
           "capturedSecondsKnown": false,
           "remainingSecondsKnown": false,
           "spawnAt": "2026-10-18T12:26:00+09:00",
+          "precisionSeconds": 120
+        },
+        {
+          "source": "screenshot-018",
+          "cycleId": "amorphos-20261020-morning",
+          "capturedAt": "2026-10-20T08:42:00+09:00",
+          "capturedSecondsKnown": false,
+          "remainingSecondsKnown": false,
+          "spawnAt": "2026-10-20T12:26:00+09:00",
           "precisionSeconds": 120
         }
       ]
